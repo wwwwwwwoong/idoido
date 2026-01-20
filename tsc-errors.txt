@@ -1,0 +1,1 @@
+﻿src/lib/imageGen.ts(31,21): error TS18048: 'response.data' is possibly 'undefined'.

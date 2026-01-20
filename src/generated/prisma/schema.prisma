@@ -1,0 +1,268 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ─────────────────────────────────────────────────────────────
+// Enums
+// ─────────────────────────────────────────────────────────────
+
+enum ResultChoice {
+  SUCCESS
+  SILLY
+  NEXT
+}
+
+enum CurrencyType {
+  WATER_DROP // 💧 물방울 (무료)
+  MAGIC_SEED // 🌱 마법의씨앗 (유료/특별보상)
+}
+
+enum BookStatus {
+  DRAFT // 작성 중
+  COMPLETED // 완성됨
+}
+
+// ─────────────────────────────────────────────────────────────
+// User Profile
+// ─────────────────────────────────────────────────────────────
+
+model Profile {
+  /// Supabase auth.users.id (UUID)
+  id        String   @id @db.Uuid
+  createdAt DateTime @default(now())
+
+  // 재화 잔액 (캐시, 실제 내역은 WalletLedger에)
+  waterDrops Int @default(0)
+  magicSeeds Int @default(0)
+
+  characters   Character[]
+  scenes       Scene[]
+  walletLedger WalletLedger[]
+  books        Book[]
+  cards        Card[]
+
+  // 레거시 (마이그레이션 후 삭제 가능)
+  seedLedger SeedLedger[]
+}
+
+// ─────────────────────────────────────────────────────────────
+// Wallet System (이중 재화)
+// ─────────────────────────────────────────────────────────────
+
+model WalletLedger {
+  id           String       @id @default(uuid()) @db.Uuid
+  userId       String       @db.Uuid
+  currencyType CurrencyType
+  delta        Int // 양수: 획득, 음수: 사용
+  reason       String // 예: "daily_login", "scene_created", "purchase"
+  createdAt    DateTime     @default(now())
+
+  user Profile @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, currencyType, createdAt])
+}
+
+// ─────────────────────────────────────────────────────────────
+// Character
+// ─────────────────────────────────────────────────────────────
+
+model Character {
+  id     String @id @default(uuid()) @db.Uuid
+  userId String @db.Uuid
+
+  name    String?
+  styleId String? // AI 스타일 ID (예: "watercolor", "clay")
+
+  // 캐릭터 프로필
+  role        String? // "hero" = 주인공, "helper" = 도우미, "other"
+  personality String? // 성격 (예: "brave", "shy", "playful")
+  likes       String[] // 좋아하는 것 배열
+
+  doodlePath String // 원본 낙서/사진 경로
+  renderPath String? // AI 변환 후 경로
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user   Profile @relation(fields: [userId], references: [id], onDelete: Cascade)
+  scenes Scene[]
+
+  @@index([userId, createdAt])
+}
+
+// ─────────────────────────────────────────────────────────────
+// Scene (장면)
+// ─────────────────────────────────────────────────────────────
+
+model Scene {
+  id          String  @id @default(uuid()) @db.Uuid
+  userId      String  @db.Uuid
+  characterId String? @db.Uuid // nullable - 캐릭터 삭제해도 장면 유지
+  bookId      String? @db.Uuid // 동화책에 속한 경우
+
+  backgroundId String
+  itemId       String
+  verbId       String
+  resultChoice ResultChoice
+
+  storyText      String? // AI 생성 스토리 텍스트 (한국어)
+  sceneImagePath String? // 합성 이미지 경로
+
+  order Int? // 동화책 내 순서
+
+  // === 신규 필드 (MVP) ===
+  textEn         String? // 영어 버전
+  beatType       String? // SETUP/INCITING/TRY_FAIL/TURN/CLIMAX/RESOLUTION
+  sceneHint      String? // 이미지용 장면 힌트
+  learningTags   Json? // {keywords[], emotion, pattern}
+  layoutTemplate String? // T1~T6 템플릿 ID
+  objects        Json? // [New] 장면 내 오브젝트 배치 정보 (SceneObject[])
+  audioUrl       String? // [New] TTS 오디오 파일 경로
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user      Profile    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  character Character? @relation(fields: [characterId], references: [id], onDelete: SetNull)
+  book      Book?      @relation(fields: [bookId], references: [id], onDelete: SetNull)
+
+  @@index([userId, createdAt])
+  @@index([characterId, createdAt])
+  @@index([bookId, order])
+}
+
+// ─────────────────────────────────────────────────────────────
+// Book (동화책)
+// ─────────────────────────────────────────────────────────────
+
+model Book {
+  id     String @id @default(uuid()) @db.Uuid
+  userId String @db.Uuid
+
+  title     String? // 동화책 제목
+  coverPath String? // 표지 이미지 경로
+  status    BookStatus @default(DRAFT)
+
+  // 교육적 콘텐츠 (기존)
+  topicId          String? // 선택한 주제 ID (예: anger, sharing, courage)
+  lesson           String? // 배울 교훈
+  targetSceneCount Int     @default(7) // 목표 장면 수 (5/7/10)
+  outline          Json? // 스토리 뼈대 (SceneGuide[])
+
+  // === Setup (신규) ===
+  pageLength Int    @default(8) // 8/12/16
+  language   String @default("ko") // ko/en/both
+  ageRange   String @default("4-7")
+
+  // === Mixer - 소재 선택 (신규) ===
+  mixerTale    String? // 전래 (예: "korean_traditional", "world_folktale")
+  mixerCulture String? // 문화 (예: "seollal", "chuseok", "hanbok")
+  mixerSetting String? // 배경 (예: "village", "forest", "palace")
+  mixerTone    String? // 톤 (예: "warm", "adventurous", "funny")
+  mixerPack    String? // 학습팩 (예: "emotions", "manners", "nature")
+
+  // === Story Bible (신규) ===
+  storyBible Json? // {tone, lesson, setting, avoid[]}
+  storyChars Json? // [{name, role, traits[]}] - characters
+  storyObjs  Json? // [핵심 소재 리스트]
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  completedAt DateTime? // 완성 시점
+
+  user   Profile       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  scenes Scene[]
+  seeds  ProjectSeed[]
+  cards  Card[]
+
+  @@index([userId, status, createdAt])
+}
+
+// ─────────────────────────────────────────────────────────────
+// Project Seed (아이가 업로드한 그림)
+// ─────────────────────────────────────────────────────────────
+
+model ProjectSeed {
+  id        String   @id @default(uuid()) @db.Uuid
+  bookId    String   @db.Uuid
+  imageUrl  String
+  seedType  String // CHARACTER/OBJECT/LOCATION/DOODLE
+  audioUrl  String?
+  createdAt DateTime @default(now())
+
+  book Book @relation(fields: [bookId], references: [id], onDelete: Cascade)
+
+  @@index([bookId])
+}
+
+// ─────────────────────────────────────────────────────────────
+model Card {
+  id     String  @id @default(uuid()) @db.Uuid
+  userId String  @db.Uuid
+  bookId String? @db.Uuid
+
+  type  String // e.g., "예술", "정서", "언어"
+  name  String // e.g., "나만의 캐릭터", "용기"
+  desc  String? // e.g., "세상에 하나뿐인 주인공"
+  color String? // UI용 색상 코드
+
+  imagePath String? // Optional image
+
+  createdAt DateTime @default(now())
+
+  user Profile @relation(fields: [userId], references: [id], onDelete: Cascade)
+  book Book?   @relation(fields: [bookId], references: [id], onDelete: SetNull)
+
+  @@index([userId, createdAt])
+}
+
+// ─────────────────────────────────────────────────────────────
+// GenerationJob (생성 작업 추적 + 환급)
+// ─────────────────────────────────────────────────────────────
+
+model GenerationJob {
+  id      String  @id @default(uuid()) @db.Uuid
+  userId  String  @db.Uuid
+  bookId  String? @db.Uuid
+  jobType String // story/text/image
+  status  String  @default("pending") // pending/running/done/failed
+
+  inputData  Json
+  outputData Json?
+  costType   String // drops/seeds
+  costAmount Int
+  refunded   Boolean @default(false)
+
+  createdAt   DateTime  @default(now())
+  completedAt DateTime?
+
+  @@index([userId, status])
+  @@index([bookId])
+}
+
+// ─────────────────────────────────────────────────────────────
+// Legacy (마이그레이션 후 삭제 예정)
+// ─────────────────────────────────────────────────────────────
+
+model SeedLedger {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @db.Uuid
+  delta     Int
+  reason    String
+  createdAt DateTime @default(now())
+
+  user Profile @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+}
