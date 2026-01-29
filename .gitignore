@@ -47,3 +47,4 @@ list-buckets.ts
 verify-supabase.ts
 verify.log
 *.log
+ppt_content.md
