@@ -39,3 +39,11 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# temp scripts
+check-models.js
+fix-covers.ts
+list-buckets.ts
+verify-supabase.ts
+verify.log
+*.log
