@@ -55,14 +55,50 @@ export default async function BookViewPage({ params }: PageProps) {
         }
     }
 
+    // URL 변환 헬퍼
+    const getImageUrl = async (path: string | null) => {
+        if (!path) return null;
+        if (path.startsWith("data:") || path.startsWith("http") || path.startsWith("/")) {
+            return path;
+        }
+        // Supabase Storage 경로 처리 (Signed URL 시도 -> 실패 시 Public URL)
+        try {
+            const cleanPath = path.replace(/^\/+/, "");
+            const { data: signedData, error } = await supabase.storage
+                .from("doodles")
+                .createSignedUrl(cleanPath, 3600);
+
+            if (error || !signedData?.signedUrl) {
+                console.error("Signed URL failed, falling back to Public URL:", error);
+                const { data: publicData } = supabase.storage.from("doodles").getPublicUrl(cleanPath);
+                return publicData.publicUrl;
+            }
+
+            return signedData.signedUrl;
+        } catch (e) {
+            console.error("URL generation error:", e);
+            // 최후의 수단: Public URL
+            const cleanPath = path.replace(/^\/+/, "");
+            const { data: publicData } = supabase.storage.from("doodles").getPublicUrl(cleanPath);
+            return publicData.publicUrl;
+        }
+    };
+
+    // 표지 이미지 결정: DB에 coverPath가 없으면 1페이지 이미지 사용 (Fallback)
+    const rawCoverPath = book.coverPath || book.scenes[0]?.sceneImagePath;
+
     // Scene 데이터 변환
-    const formattedScenes = book.scenes.map(scene => ({
+    const formattedScenes = await Promise.all(book.scenes.map(async (scene) => ({
         id: scene.id,
         order: scene.order ?? 0,
         backgroundId: scene.backgroundId,
         storyText: scene.storyText,
         objects: scene.objects as any || null,
-    }));
+        sceneImagePath: (await getImageUrl(scene.sceneImagePath)) || undefined,
+    })));
+
+    // 표지 이미지 Signed URL 변환
+    const coverUrl = (await getImageUrl(rawCoverPath)) || undefined;
 
     return (
         <BookViewerClient
@@ -71,6 +107,8 @@ export default async function BookViewPage({ params }: PageProps) {
                 title: book.title,
                 status: book.status,
                 scenes: formattedScenes,
+                coverPath: coverUrl, // 변환된 표지 URL (또는 폴백)
+                coverColor: undefined, // BookViewer가 알아서 처리
             }}
             characterImageUrl={characterImageUrl}
             user={data.user}

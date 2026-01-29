@@ -8,10 +8,24 @@ import { Card } from "@/components/ui/Card";
 import * as Icons from "lucide-react";
 import { LibraryCard, StoryRecipe } from "@/lib/types/library";
 import { personalityCards, roleCards, placeCards, eventCards, moodCards, learningTopicCards, learningCards } from "@/lib/libraryCards";
+import { allItems } from "../scene/data";
 import { RefreshCw } from "lucide-react";
 
 import StoryFlowLayout from "@/components/layout/StoryFlowLayout";
 import Helper from "@/components/create/Helper";
+import { createClient } from "@/lib/supabase/client";
+
+function base64ToBlob(base64: string) {
+    const parts = base64.split(';base64,');
+    const contentType = parts[0].split(':')[1];
+    const raw = window.atob(parts[1]);
+    const rawLength = raw.length;
+    const uInt8Array = new Uint8Array(rawLength);
+    for (let i = 0; i < rawLength; ++i) {
+        uInt8Array[i] = raw.charCodeAt(i);
+    }
+    return new Blob([uInt8Array], { type: contentType });
+}
 
 export default function CreateLearningPage() {
     const router = useRouter();
@@ -81,6 +95,37 @@ export default function CreateLearningPage() {
             if (moodCard) newEarnedCards.push(moodCard);
         }
 
+        // 씬에서 배치한 아이템 카드 추가
+        const savedScene = localStorage.getItem("create_scene");
+        if (savedScene) {
+            try {
+                const parsedScene = JSON.parse(savedScene);
+                if (parsedScene.placedItemIds && Array.isArray(parsedScene.placedItemIds)) {
+                    parsedScene.placedItemIds.forEach((itemNameOrId: string) => {
+                        // ID나 이름으로 매칭
+                        const item = allItems.find(i => i.id === itemNameOrId || i.name === itemNameOrId);
+                        if (item) {
+                            // 중복 체크
+                            if (!newEarnedCards.find(c => c.name === item.name)) {
+                                newEarnedCards.push({
+                                    id: item.id,
+                                    category: "object",
+                                    name: item.name,
+                                    description: "이야기 속 소중한 물건",
+                                    icon: "Star",
+                                    color: item.color,
+                                    bgColor: `${item.color}20`,
+                                    imagePath: item.imagePath,
+                                });
+                            }
+                        }
+                    });
+                }
+            } catch (e) {
+                console.error("Failed to load scene items", e);
+            }
+        }
+
         const writerCard: LibraryCard = {
             id: "bonus_writer",
             category: "role",
@@ -89,6 +134,7 @@ export default function CreateLearningPage() {
             icon: "PenTool",
             color: "#8B5CF6",
             bgColor: "#EDE9FE",
+            imagePath: "/images/cards/bonus-writer.webp",
         };
         newEarnedCards.push(writerCard);
 
@@ -103,7 +149,7 @@ export default function CreateLearningPage() {
         try {
             const savedRecipe = localStorage.getItem("create_recipe");
             const savedStory = localStorage.getItem("create_story");
-            const savedScenes = localStorage.getItem("create_scenes");
+            const savedScene = localStorage.getItem("create_scene"); // 단수형 사용
             const savedCharacter = localStorage.getItem("create_character");
 
             if (!savedRecipe || !savedStory) {
@@ -112,30 +158,88 @@ export default function CreateLearningPage() {
 
             const parsedRecipe = JSON.parse(savedRecipe);
             const parsedStory = JSON.parse(savedStory);
-            const parsedScenes = savedScenes ? JSON.parse(savedScenes) : [];
+            const parsedScene = savedScene ? JSON.parse(savedScene) : null;
             const parsedCharacter = savedCharacter ? JSON.parse(savedCharacter) : null;
+
+            // learningTopic이 객체일 수도 있고 문자열일 수도 있음
+            const topicIdValue = typeof parsedRecipe.learningTopic === 'object'
+                ? parsedRecipe.learningTopic?.id
+                : parsedRecipe.learningTopic;
+
+            const supabase = createClient();
+
+            // 1. 표지 이미지 업로드 (Base64 -> Supabase)
+            let coverPath = parsedStory.coverImageUrl || parsedStory.coverImage; // 필드명 호환성 (coverImageUrl이 맞음)
+            if (coverPath && coverPath.startsWith("data:")) {
+                try {
+                    const blob = base64ToBlob(coverPath);
+                    const fileExt = blob.type.split('/')[1] || 'png';
+                    const fileName = `covers/${Date.now()}_${Math.random().toString(36).substring(7)}.${fileExt}`;
+                    const { data, error } = await supabase.storage.from("doodles").upload(fileName, blob);
+                    if (!error && data) coverPath = data.path;
+                } catch (e) {
+                    console.error("Cover upload failed", e);
+                }
+            }
+
+            // 2. 스토리의 각 페이지를 씬으로 변환 (이미지 업로드 포함)
+            let storyScenes: any[] = [];
+
+            if (parsedStory.pages && Array.isArray(parsedStory.pages)) {
+                storyScenes = await Promise.all(parsedStory.pages.map(async (page: any, index: number) => {
+                    let imageUrl = page.imageUrl;
+                    if (imageUrl && imageUrl.startsWith("data:")) {
+                        try {
+                            const blob = base64ToBlob(imageUrl);
+                            const fileExt = blob.type.split('/')[1] || 'png';
+                            const fileName = `scenes/${Date.now()}_${index}_${Math.random().toString(36).substring(7)}.${fileExt}`;
+                            const { data, error } = await supabase.storage.from("doodles").upload(fileName, blob);
+                            if (!error && data) imageUrl = data.path;
+                        } catch (e) {
+                            console.error("Scene image upload failed", e);
+                        }
+                    }
+
+                    return {
+                        order: page.pageNumber || index + 1,
+                        storyText: page.content,
+                        sceneImagePath: imageUrl, // Fixed: API expects sceneImagePath, not imageUrl
+                        backgroundId: parsedScene?.backgroundId || (typeof parsedRecipe.place === 'object' ? parsedRecipe.place?.id : parsedRecipe.place) || page.suggestedBackground,
+                        objects: index === 0 ? parsedScene?.objects : null,
+                        characterId: parsedCharacter?.id,
+                        learningTags: page.learningHighlight ? [page.learningHighlight] : null,
+                    };
+                }));
+            } else if (parsedStory.paragraphs && Array.isArray(parsedStory.paragraphs)) {
+                storyScenes = parsedStory.paragraphs.map((paragraph: string, index: number) => ({
+                    order: index + 1,
+                    storyText: paragraph,
+                    backgroundId: parsedScene?.backgroundId || (typeof parsedRecipe.place === 'object' ? parsedRecipe.place?.id : parsedRecipe.place),
+                    objects: index === 0 ? parsedScene?.objects : null,
+                    characterId: parsedCharacter?.id,
+                }));
+            }
 
             const payload = {
                 title: parsedStory.title || "나만의 동화책",
-                coverPath: parsedStory.coverImage,
+                coverPath: coverPath, // 업로드된 경로 사용
                 pageLength: parsedRecipe.setup?.pageLength || 8,
                 language: parsedRecipe.setup?.language || "ko",
                 ageRange: parsedRecipe.setup?.ageRange || "4-7",
-                topicId: parsedRecipe.learningTopic,
-                scenes: parsedScenes.map((scene: any, index: number) => ({
-                    order: index + 1,
-                    text: scene.storyText,
-                    imageUrl: scene.imageUrl,
-                    backgroundId: scene.backgroundId || parsedRecipe.place,
-                    characterId: parsedCharacter?.id,
-                })),
-                cards: earnedCards.map(card => ({
-                    type: card.category || "unknown",
-                    name: card.name,
-                    desc: card.description,
-                    color: card.color,
-                    imagePath: card.imagePath,
-                }))
+                topicId: topicIdValue,
+                scenes: storyScenes,
+                // 중복 카드 제거 (name 기준)
+                cards: Array.from(
+                    new Map(
+                        earnedCards.map(card => [card.name, {
+                            type: card.category || "unknown",
+                            name: card.name,
+                            desc: card.description,
+                            color: card.color,
+                            imagePath: card.imagePath,
+                        }])
+                    ).values()
+                )
             };
 
             const response = await fetch("/api/books", {
@@ -146,7 +250,13 @@ export default function CreateLearningPage() {
 
             if (!response.ok) {
                 const errData = await response.json();
-                throw new Error(errData.error || "자장 저장에 실패했습니다.");
+                console.error("API Error Response:", errData);
+                // Validation 에러일 경우 자세한 내용 표시
+                if (errData.issues && errData.issues.length > 0) {
+                    const issueMessages = errData.issues.map((i: any) => `${i.path}: ${i.message}`).join(", ");
+                    throw new Error(`${errData.error}: ${issueMessages}`);
+                }
+                throw new Error(errData.error || "저장에 실패했습니다.");
             }
 
             localStorage.removeItem("create_recipe");
@@ -198,15 +308,7 @@ export default function CreateLearningPage() {
                                         className="aspect-square w-full flex items-center justify-center relative p-4"
                                         style={{ backgroundColor: `${card.color}15` || "#f3f4f6" }}
                                     >
-                                        <div className="absolute inset-0 flex items-center justify-center opacity-50">
-                                            <IconComponent
-                                                size={48}
-                                                color={card.color || "#6b7280"}
-                                                className="drop-shadow-sm"
-                                            />
-                                        </div>
-
-                                        {card.imagePath && ["personality", "place"].includes(card.category || "") && (
+                                        {card.imagePath ? (
                                             <div className="relative w-full h-full z-10 transition-opacity duration-300">
                                                 <Image
                                                     src={card.imagePath}
@@ -219,6 +321,12 @@ export default function CreateLearningPage() {
                                                     }}
                                                 />
                                             </div>
+                                        ) : (
+                                            <IconComponent
+                                                size={48}
+                                                color={card.color || "#6b7280"}
+                                                className="drop-shadow-sm"
+                                            />
                                         )}
                                     </div>
                                     <div className="p-3 text-center flex-1 flex flex-col gap-1">

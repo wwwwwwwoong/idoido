@@ -25,44 +25,59 @@ export async function DELETE(_req: Request, { params }: RouteParams) {
             return notFoundResponse("Character");
         }
 
-        // Supabase Storage에서 파일 삭제 (로컬 파일이나 외부 URL은 건너뜀)
-        const isStoragePath = (path: string | null) =>
-            path && !path.startsWith("http") && !path.startsWith("/");
+        // Supabase Storage 경로 추출 및 삭제
+        console.log(`Deleting character ${characterId}. Paths:`, {
+            doodle: character.doodlePath,
+            render: character.renderPath
+        });
 
-        if (isStoragePath(character.doodlePath)) {
-            try {
-                const { createClient } = await import("@/lib/supabase/server");
-                const supabase = await createClient();
+        const getStoragePath = (path: string | null) => {
+            if (!path) return null;
+            if (path.startsWith("data:")) return null; // Base64 스킵
 
-                console.log("Deleting from storage:", character.doodlePath);
-                const { error } = await supabase.storage
-                    .from("doodles")
-                    .remove([character.doodlePath!]);
+            // 로컬 에셋(/assets, /images)은 제외
+            if (path.startsWith("/assets") || path.startsWith("/items") || path.startsWith("/backgrounds")) return null;
 
-                if (error) {
-                    console.error("Storage delete error:", error);
-                } else {
-                    console.log("Storage file deleted:", character.doodlePath);
+            if (path.startsWith("http")) {
+                const parts = path.split("/doodles/");
+                if (parts.length > 1) {
+                    try {
+                        return decodeURIComponent(parts[1].split('?')[0]);
+                    } catch {
+                        return parts[1];
+                    }
                 }
-            } catch (e) {
-                console.error("Failed to delete storage file:", e);
+                // 다른 버킷일 수도 있지만, 현재는 doodles만 사용
+                return null;
             }
-        }
+            // "/scenes/..." 처럼 앞에 /가 있는 경우 제거 (Supabase API는 상대경로 선호)
+            if (path.startsWith("/")) return path.substring(1);
 
-        // renderPath도 삭제 (있는 경우)
-        if (isStoragePath(character.renderPath)) {
-            try {
-                const { createClient } = await import("@/lib/supabase/server");
-                const supabase = await createClient();
+            return path;
+        };
 
-                console.log("Deleting render from storage:", character.renderPath);
-                await supabase.storage
-                    .from("doodles")
-                    .remove([character.renderPath!]);
-            } catch (e) {
-                console.error("Failed to delete render file:", e);
-            }
-        }
+        const doodleStoragePath = getStoragePath(character.doodlePath);
+        const renderStoragePath = getStoragePath(character.renderPath);
+
+        const { createClient } = await import("@/lib/supabase/server");
+        const supabase = await createClient();
+
+        // 병렬 삭제 시도 (하나가 실패해도 다른 하나는 시도)
+        await Promise.all([
+            doodleStoragePath ? (async () => {
+                console.log("Deleting doodle:", doodleStoragePath);
+                const { error } = await supabase.storage.from("doodles").remove([doodleStoragePath]);
+                if (error) console.error("Error deleting doodle:", error);
+                else console.log("Deleted doodle success");
+            })() : Promise.resolve(),
+
+            renderStoragePath && renderStoragePath !== doodleStoragePath ? (async () => {
+                console.log("Deleting render:", renderStoragePath);
+                const { error } = await supabase.storage.from("doodles").remove([renderStoragePath]);
+                if (error) console.error("Error deleting render:", error);
+                else console.log("Deleted render success");
+            })() : Promise.resolve()
+        ]);
 
         // 캐릭터 삭제 (장면의 characterId는 SetNull로 자동 처리)
         await prisma.character.delete({
@@ -75,3 +90,36 @@ export async function DELETE(_req: Request, { params }: RouteParams) {
     }
 }
 
+/**
+ * PATCH /api/characters/[characterId]
+ * 캐릭터 정보 수정 (이름 변경 등)
+ */
+export async function PATCH(req: Request, { params }: RouteParams) {
+    try {
+        const userId = await requireUserId();
+        const { characterId } = await params;
+        const body = await req.json();
+        const { name } = body;
+
+        if (!name || typeof name !== "string") {
+            return new Response(JSON.stringify({ error: "Name is required" }), { status: 400 });
+        }
+
+        const character = await prisma.character.findFirst({
+            where: { id: characterId, userId },
+        });
+
+        if (!character) {
+            return notFoundResponse("Character");
+        }
+
+        const updatedCharacter = await prisma.character.update({
+            where: { id: characterId },
+            data: { name },
+        });
+
+        return successResponse(updatedCharacter);
+    } catch (error) {
+        return handleApiError(error);
+    }
+}

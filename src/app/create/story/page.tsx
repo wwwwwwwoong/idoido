@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { ChevronRight, ChevronLeft, RefreshCw, Sparkles, Wand2, Star, ImageIcon } from "lucide-react";
@@ -11,6 +11,20 @@ import { generateStory, type GeneratedStory } from "@/lib/storyGenerator";
 import type { LibraryCard } from "@/lib/types/library";
 import Image from "next/image";
 import { backgrounds, allItems } from "../scene/data"; // Shared data
+import { createClient } from "@/lib/supabase/client";
+import { toPng } from "html-to-image";
+
+function base64ToBlob(base64: string) {
+    const parts = base64.split(';base64,');
+    const contentType = parts[0].split(':')[1];
+    const raw = window.atob(parts[1]);
+    const rawLength = raw.length;
+    const uInt8Array = new Uint8Array(rawLength);
+    for (let i = 0; i < rawLength; ++i) {
+        uInt8Array[i] = raw.charCodeAt(i);
+    }
+    return new Blob([uInt8Array], { type: contentType });
+}
 
 // Scene Object Interface from create/scene/page.tsx
 interface SceneObject {
@@ -20,10 +34,12 @@ interface SceneObject {
     x: number;
     y: number;
     scale: number;
+    rotation?: number;
 }
 
 export default function CreateStoryPage() {
     const router = useRouter();
+    const sceneRef = useRef<HTMLDivElement>(null); // Ref for scene capture
     const [stories, setStories] = useState<GeneratedStory[]>([]);
     const [selectedIdx, setSelectedIdx] = useState<number | null>(null);
     const [isGenerating, setIsGenerating] = useState(true);
@@ -47,7 +63,12 @@ export default function CreateStoryPage() {
         name: string;
         transformedImageUrl?: string;
         imageUrl?: string;
+        description?: string;
+        styleId?: string;
     } | null>(null);
+
+    // 이미지 생성 진행 상황
+    const [imageProgress, setImageProgress] = useState<{ current: number; total: number; status: string } | null>(null);
 
     const [loadingStep, setLoadingStep] = useState(0);
     const loadingMessages = [
@@ -111,6 +132,7 @@ export default function CreateStoryPage() {
             return;
         }
 
+        // 캐시된 스토리가 있으면 그걸 보여줌
         const cached = sessionStorage.getItem("cached_story");
         if (cached) {
             try {
@@ -125,11 +147,22 @@ export default function CreateStoryPage() {
             }
         }
 
+        // 버튼 클릭으로 진입했는지 확인 (새로고침/뒤로가기 방지)
+        const shouldGenerate = sessionStorage.getItem("should_generate_story");
+        if (!shouldGenerate) {
+            // 플래그가 없으면 AI 호출하지 않음 (새로고침/뒤로가기)
+            setIsGenerating(false);
+            return;
+        }
+
+        // 플래그 사용 후 삭제 (다음 새로고침에서 재호출 방지)
+        sessionStorage.removeItem("should_generate_story");
+
         setIsGenerating(true);
         setLoadingStep(0);
 
         try {
-            // 1. 텍스트 스토리 생성 ONLY (이미지 생성 제거)
+            // 1. 스토리 생성 (AI - 텍스트 및 프롬프트만 생성, 이미지 미생성)
             const generated = await generateStory({
                 personality: recipeData.personality,
                 role: recipeData.role,
@@ -139,14 +172,19 @@ export default function CreateStoryPage() {
                 characterName: charName,
                 placedItems: sceneInfo?.placedItemIds || [],
                 learningTopic: recipeData.learningTopic || undefined,
+                visualDescription: character?.description,
             });
 
             if (generated.length > 0) {
                 const story = generated[0];
                 setStories([story]);
-                sessionStorage.setItem("cached_story", JSON.stringify([story]));
+                try {
+                    sessionStorage.setItem("cached_story", JSON.stringify([story]));
+                } catch (e) {
+                    console.error("Session storage full", e);
+                }
             } else {
-                setStories(generated);
+                setStories([]);
             }
 
         } catch (error) {
@@ -174,11 +212,153 @@ export default function CreateStoryPage() {
         }
     };
 
-    const handleNext = () => {
-        if (selectedStory) {
-            // 스토리를 저장하고, 완성 페이지(Phase 4)로 이동
-            localStorage.setItem("create_story", JSON.stringify(selectedStory));
+    // 단일 이미지 생성 (재시도 + 타임아웃 포함)
+    const generateSingleImage = async (
+        payload: any,
+        maxRetries = 2,
+        timeoutMs = 60000
+    ): Promise<any> => {
+        for (let attempt = 0; attempt <= maxRetries; attempt++) {
+            try {
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+                const res = await fetch("/api/story/generate-single-image", {
+                    method: "POST",
+                    body: JSON.stringify(payload),
+                    headers: { "Content-Type": "application/json" },
+                    signal: controller.signal
+                });
+
+                clearTimeout(timeoutId);
+
+                if (res.ok) {
+                    return await res.json();
+                }
+
+                console.warn(`Image generation attempt ${attempt + 1} failed with status ${res.status}`);
+            } catch (err: any) {
+                if (err.name === "AbortError") {
+                    console.warn(`Image generation timed out (attempt ${attempt + 1})`);
+                } else {
+                    console.error(`Image generation error (attempt ${attempt + 1}):`, err);
+                }
+
+                if (attempt < maxRetries) {
+                    // 재시도 전 짧은 대기
+                    await new Promise(r => setTimeout(r, 1000));
+                }
+            }
+        }
+        return null;
+    };
+
+    const handleNext = async () => {
+        if (!selectedStory) return;
+
+        setIsGenerating(true);
+
+        // Capture Scene
+        let referenceImage = null;
+        if (sceneRef.current) {
+            try {
+                const dataUrl = await toPng(sceneRef.current, { cacheBust: true });
+                // Remove prefix to get clean base64
+                referenceImage = dataUrl.replace(/^data:image\/png;base64,/, "");
+            } catch (err) {
+                console.error("Failed to capture scene:", err);
+            }
+        }
+
+        const contextData = {
+            characterName: character?.name || "주인공",
+            characterDescription: character?.description || recipe?.role?.name || "character",
+            styleId: character?.styleId || "storybook",
+            background: currentBg?.name || recipe?.place?.name || "fantasy world",
+            items: sceneData?.placedItemIds || [],
+            objects: sceneData?.objects || [], // 위치 정보를 포함한 전체 오브젝트 데이터 전달
+            referenceImage: referenceImage, // High fidelity reference (Scene Sketch)
+            characterImage: character?.transformedImageUrl || character?.imageUrl // Character Visual Reference
+        };
+
+        const totalImages = selectedStory.pages.length + 1; // pages + cover
+        let finalPages = [...selectedStory.pages];
+        let finalCoverImageUrl = selectedStory.coverImageUrl;
+        let completedCount = 0;
+
+        try {
+            // 병렬 처리: 2개씩 배치로 처리 (API Rate Limit 고려)
+            const BATCH_SIZE = 2;
+            const pages = selectedStory.pages;
+
+            for (let batchStart = 0; batchStart < pages.length; batchStart += BATCH_SIZE) {
+                const batchEnd = Math.min(batchStart + BATCH_SIZE, pages.length);
+                const batch = pages.slice(batchStart, batchEnd);
+
+                // 현재 배치 진행 상황 표시
+                setImageProgress({
+                    current: batchStart + 1,
+                    total: totalImages,
+                    status: `${batchStart + 1}~${batchEnd}번째 삽화 그리는 중...`
+                });
+
+                // 배치 내에서 병렬 처리
+                const batchResults = await Promise.all(
+                    batch.map((page, idx) =>
+                        generateSingleImage({
+                            page,
+                            context: contextData,
+                            type: "page"
+                        }).then(result => ({
+                            index: batchStart + idx,
+                            result
+                        }))
+                    )
+                );
+
+                // 결과 적용
+                batchResults.forEach(({ index, result }) => {
+                    if (result?.page && !result.skipped) {
+                        finalPages[index] = result.page;
+                    }
+                    completedCount++;
+                });
+            }
+
+            // 표지 이미지 생성
+            if (selectedStory.coverImagePrompt) {
+                setImageProgress({
+                    current: totalImages,
+                    total: totalImages,
+                    status: "표지 그리는 중..."
+                });
+
+                const coverResult = await generateSingleImage({
+                    coverImagePrompt: selectedStory.coverImagePrompt,
+                    context: contextData,
+                    type: "cover"
+                });
+
+                if (coverResult?.coverImageUrl) {
+                    finalCoverImageUrl = coverResult.coverImageUrl;
+                }
+            }
+
+            const storyToSave = {
+                ...selectedStory,
+                pages: finalPages,
+                coverImageUrl: finalCoverImageUrl
+            };
+
+            // DB 저장은 learning 단계에서 최종적으로 진행 (중복 저장 방지)
+            localStorage.setItem("create_story", JSON.stringify(storyToSave));
             router.push("/create/complete");
+
+        } catch (e) {
+            console.error("Completion process failed:", e);
+            alert("처리 중 오류가 발생했습니다.");
+            setIsGenerating(false);
+            setImageProgress(null);
         }
     };
 
@@ -223,32 +403,75 @@ export default function CreateStoryPage() {
                     width: "100%",
                 }}>
                     <Wand2 size={48} color="#8B5CF6" style={{ marginBottom: "1.5rem" }} className="animate-pulse" />
-                    <div style={{ height: "30px", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                        <AnimatePresence mode="wait">
-                            <motion.p
-                                key={loadingStep}
-                                initial={{ opacity: 0, y: 10 }}
-                                animate={{ opacity: 1, y: 0 }}
-                                exit={{ opacity: 0, y: -10 }}
-                                style={{
-                                    color: "#4B5563",
-                                    fontSize: "1.1rem",
-                                    fontWeight: 500,
-                                    textAlign: "center",
-                                }}
-                            >
-                                {loadingMessages[loadingStep]}
-                            </motion.p>
-                        </AnimatePresence>
-                    </div>
-                    <div style={{ width: "200px", height: "4px", backgroundColor: "#E5E7EB", borderRadius: "2px", marginTop: "1.5rem", overflow: "hidden" }}>
-                        <motion.div
-                            initial={{ x: "-100%" }}
-                            animate={{ x: "100%" }}
-                            transition={{ duration: 1.5, repeat: Infinity, ease: "linear" }}
-                            style={{ width: "100%", height: "100%", backgroundColor: "#8B5CF6" }}
-                        />
-                    </div>
+
+                    {/* 이미지 생성 진행 상황 표시 */}
+                    {imageProgress ? (
+                        <div style={{ textAlign: "center" }}>
+                            <p style={{
+                                color: "#7C3AED",
+                                fontSize: "1.2rem",
+                                fontWeight: 600,
+                                marginBottom: "0.5rem"
+                            }}>
+                                🎨 {imageProgress.status}
+                            </p>
+                            <p style={{
+                                color: "#6B7280",
+                                fontSize: "0.9rem",
+                            }}>
+                                {imageProgress.current} / {imageProgress.total} 완료
+                            </p>
+                            {/* 실제 진행률 바 */}
+                            <div style={{
+                                width: "280px",
+                                height: "8px",
+                                backgroundColor: "#E5E7EB",
+                                borderRadius: "4px",
+                                marginTop: "1rem",
+                                overflow: "hidden"
+                            }}>
+                                <motion.div
+                                    initial={{ width: 0 }}
+                                    animate={{ width: `${(imageProgress.current / imageProgress.total) * 100}%` }}
+                                    transition={{ duration: 0.5, ease: "easeOut" }}
+                                    style={{
+                                        height: "100%",
+                                        backgroundColor: "#8B5CF6",
+                                        borderRadius: "4px"
+                                    }}
+                                />
+                            </div>
+                        </div>
+                    ) : (
+                        <>
+                            <div style={{ height: "30px", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                                <AnimatePresence mode="wait">
+                                    <motion.p
+                                        key={loadingStep}
+                                        initial={{ opacity: 0, y: 10 }}
+                                        animate={{ opacity: 1, y: 0 }}
+                                        exit={{ opacity: 0, y: -10 }}
+                                        style={{
+                                            color: "#4B5563",
+                                            fontSize: "1.1rem",
+                                            fontWeight: 500,
+                                            textAlign: "center",
+                                        }}
+                                    >
+                                        {loadingMessages[loadingStep]}
+                                    </motion.p>
+                                </AnimatePresence>
+                            </div>
+                            <div style={{ width: "200px", height: "4px", backgroundColor: "#E5E7EB", borderRadius: "2px", marginTop: "1.5rem", overflow: "hidden" }}>
+                                <motion.div
+                                    initial={{ x: "-100%" }}
+                                    animate={{ x: "100%" }}
+                                    transition={{ duration: 1.5, repeat: Infinity, ease: "linear" }}
+                                    style={{ width: "100%", height: "100%", backgroundColor: "#8B5CF6" }}
+                                />
+                            </div>
+                        </>
+                    )}
                 </div>
             </StoryFlowLayout>
         );
@@ -300,16 +523,18 @@ export default function CreateStoryPage() {
 
                         {/* 1. Scene Preview (Left/Top) */}
                         <div style={{ flex: 1.2 }}>
-                            <div style={{
-                                width: "100%",
-                                aspectRatio: "16 / 9",
-                                backgroundColor: "#F3F4F6",
-                                borderRadius: "20px",
-                                overflow: "hidden",
-                                border: "4px solid #F3F4F6",
-                                position: "relative",
-                                boxShadow: "0 4px 20px rgba(0,0,0,0.05)",
-                            }}>
+                            <div
+                                ref={sceneRef}
+                                style={{
+                                    width: "100%",
+                                    aspectRatio: "16 / 9",
+                                    backgroundColor: "#F3F4F6",
+                                    borderRadius: "20px",
+                                    overflow: "hidden",
+                                    border: "4px solid #F3F4F6",
+                                    position: "relative",
+                                    boxShadow: "0 4px 20px rgba(0,0,0,0.05)",
+                                }}>
                                 {/* Background */}
                                 {currentBg ? (
                                     <div style={{ position: "absolute", inset: 0, zIndex: 0 }}>
@@ -339,11 +564,15 @@ export default function CreateStoryPage() {
                                                 position: "absolute",
                                                 left: `${obj.x}%`,
                                                 top: `${obj.y}%`,
-                                                width: "80px", // Base Size
-                                                height: "80px",
-                                                transform: `translate(-50%, -50%) scale(${obj.scale})`,
+                                                width: obj.type === "character" ? "20%" : "13%",
+                                                aspectRatio: "1/1",
+                                                transform: `translate(-50%, -50%) scale(${obj.scale}) rotate(${obj.rotation || 0}deg)`,
                                                 zIndex: 10,
-                                                pointerEvents: "none" // Read Only
+                                                pointerEvents: "none",
+                                                display: "flex",
+                                                alignItems: "center",
+                                                justifyContent: "center",
+                                                borderRadius: obj.type === "character" ? "8px" : "12px",
                                             }}
                                         >
                                             {obj.type === "character" && (character?.transformedImageUrl || character?.imageUrl) && (

@@ -69,6 +69,7 @@ interface SceneObject {
     x: number;
     y: number;
     scale: number;
+    rotation: number;
 }
 
 // 드래그 가능한 오브젝트 컴포넌트
@@ -82,6 +83,7 @@ function DraggableObject({
     onSelect,
     onRemove,
     onScale,
+    onRotate,
     onPositionChange,
 }: {
     obj: SceneObject;
@@ -93,6 +95,7 @@ function DraggableObject({
     onSelect: () => void;
     onRemove: () => void;
     onScale: (delta: number) => void;
+    onRotate: (delta: number) => void;
     onPositionChange: (x: number, y: number) => void;
 }) {
     const elementRef = useRef<HTMLDivElement>(null);
@@ -100,6 +103,23 @@ function DraggableObject({
     const [imgError, setImgError] = useState(false);
     const dragStartPos = useRef({ x: 0, y: 0 });
     const elementStartPos = useRef({ x: 0, y: 0 });
+    const rotateInterval = useRef<NodeJS.Timeout | null>(null);
+
+    // 회전 시작
+    const startRotating = (delta: number) => {
+        onRotate(delta);
+        rotateInterval.current = setInterval(() => {
+            onRotate(delta);
+        }, 80);
+    };
+
+    // 회전 멈춤
+    const stopRotating = () => {
+        if (rotateInterval.current) {
+            clearInterval(rotateInterval.current);
+            rotateInterval.current = null;
+        }
+    };
 
     const handleMouseDown = (e: React.MouseEvent) => {
         e.preventDefault();
@@ -180,6 +200,8 @@ function DraggableObject({
                 position: "absolute",
                 left: `${obj.x}%`,
                 top: `${obj.y}%`,
+                width: obj.type === "character" ? "20%" : "13%", // Fixed pixel -> Percentage
+                aspectRatio: "1/1",
                 transform: "translate(-50%, -50%)",
                 zIndex: isSelected ? 100 : (obj.type === "character" ? 5 : 10),
                 cursor: isDragging ? "grabbing" : "grab",
@@ -199,7 +221,7 @@ function DraggableObject({
                     onPointerUp={(e) => e.stopPropagation()}
                     style={{
                         position: "absolute",
-                        top: -50,
+                        top: "-60px", // Adjusted for better spacing
                         left: "50%",
                         transform: "translateX(-50%)",
                         display: "flex",
@@ -209,6 +231,7 @@ function DraggableObject({
                         padding: "4px",
                         boxShadow: "0 2px 10px rgba(0,0,0,0.15)",
                         zIndex: 200,
+                        width: "max-content"
                     }}>
                     <button
                         onMouseDown={(e) => e.stopPropagation()}
@@ -224,6 +247,30 @@ function DraggableObject({
                     >
                         <Plus size={16} />
                     </button>
+                    <div style={{ width: 1, height: 20, backgroundColor: "#E5E7EB" }} />
+                    <button
+                        onMouseDown={(e) => { e.stopPropagation(); startRotating(-5); }}
+                        onMouseUp={stopRotating}
+                        onMouseLeave={stopRotating}
+                        onTouchStart={(e) => { e.stopPropagation(); startRotating(-5); }}
+                        onTouchEnd={stopRotating}
+                        style={{ width: 28, height: 28, borderRadius: "6px", border: "none", backgroundColor: "#E0E7FF", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
+                        title="왼쪽으로 회전 (누르고 있으면 계속)"
+                    >
+                        <span style={{ fontSize: "12px" }}>↺</span>
+                    </button>
+                    <button
+                        onMouseDown={(e) => { e.stopPropagation(); startRotating(5); }}
+                        onMouseUp={stopRotating}
+                        onMouseLeave={stopRotating}
+                        onTouchStart={(e) => { e.stopPropagation(); startRotating(5); }}
+                        onTouchEnd={stopRotating}
+                        style={{ width: 28, height: 28, borderRadius: "6px", border: "none", backgroundColor: "#E0E7FF", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
+                        title="오른쪽으로 회전 (누르고 있으면 계속)"
+                    >
+                        <span style={{ fontSize: "12px" }}>↻</span>
+                    </button>
+                    <div style={{ width: 1, height: 20, backgroundColor: "#E5E7EB" }} />
                     <button
                         onMouseDown={(e) => e.stopPropagation()}
                         onClick={(e) => { e.stopPropagation(); onRemove(); }}
@@ -236,17 +283,19 @@ function DraggableObject({
 
             {/* 콘텐츠 */}
             <div style={{
-                transform: `scale(${obj.scale})`,
+                transform: `scale(${obj.scale}) rotate(${obj.rotation}deg)`,
                 transition: isDragging ? "none" : "transform 0.15s ease",
+                width: "100%",
+                height: "100%",
             }}>
                 {obj.type === "character" ? (
                     <div style={{
-                        width: 80,
-                        height: 80,
+                        width: "100%",
+                        height: "100%",
                         display: "flex",
                         alignItems: "center",
                         justifyContent: "center",
-                        borderRadius: "50%",
+                        borderRadius: "8px",
                         border: "3px solid transparent",
                         overflow: "hidden",
                     }}>
@@ -254,15 +303,14 @@ function DraggableObject({
                             <Image
                                 src={characterImage}
                                 alt={characterName}
-                                width={80}
-                                height={80}
-                                style={{ objectFit: "cover", pointerEvents: "none" }}
+                                fill
+                                style={{ objectFit: "contain", pointerEvents: "none" }}
                                 draggable={false}
                             />
                         ) : (
                             <div style={{
-                                width: 80,
-                                height: 80,
+                                width: "100%",
+                                height: "100%",
                                 backgroundColor: "#EC4899",
                                 display: "flex",
                                 alignItems: "center",
@@ -277,8 +325,8 @@ function DraggableObject({
                     </div>
                 ) : item ? (
                     <div style={{
-                        width: 60,
-                        height: 60,
+                        width: "100%",
+                        height: "100%",
                         display: "flex",
                         alignItems: "center",
                         justifyContent: "center",
@@ -290,8 +338,7 @@ function DraggableObject({
                             <Image
                                 src={item.imagePath}
                                 alt={item.name}
-                                width={55}
-                                height={55}
+                                fill
                                 style={{ objectFit: "contain", pointerEvents: "none" }}
                                 draggable={false}
                                 onError={() => setImgError(true)}
@@ -383,6 +430,7 @@ export default function CreateScenePage() {
             x: 50,
             y: 50,
             scale: 1,
+            rotation: 0,
         };
         setObjects([...objects, newObj]);
     };
@@ -397,7 +445,7 @@ export default function CreateScenePage() {
     const updateObjectScale = (id: string, delta: number) => {
         setObjects(prev => prev.map(obj =>
             obj.id === id
-                ? { ...obj, scale: Math.max(0.5, Math.min(2.5, obj.scale + delta)) }
+                ? { ...obj, scale: Math.max(0.7, Math.min(2.5, obj.scale + delta)) }
                 : obj
         ));
     };
@@ -406,6 +454,15 @@ export default function CreateScenePage() {
     const updateObjectPosition = (id: string, x: number, y: number) => {
         setObjects(prev => prev.map(obj =>
             obj.id === id ? { ...obj, x, y } : obj
+        ));
+    };
+
+    // 객체 회전
+    const updateObjectRotation = (id: string, delta: number) => {
+        setObjects(prev => prev.map(obj =>
+            obj.id === id
+                ? { ...obj, rotation: obj.rotation + delta }
+                : obj
         ));
     };
 
@@ -423,6 +480,13 @@ export default function CreateScenePage() {
             objects,
             placedItemIds,
         }));
+
+        // 버튼 클릭으로 이동할 때만 AI 생성 허용 플래그 설정
+        sessionStorage.setItem("should_generate_story", "true");
+
+        // 새로운 이야기를 만들기 위해 캐시 삭제
+        sessionStorage.removeItem("cached_story");
+
         router.push("/create/story");
     };
 
@@ -512,6 +576,7 @@ export default function CreateScenePage() {
                                     onSelect={() => setSelectedObjectId(obj.id)}
                                     onRemove={() => removeObject(obj.id)}
                                     onScale={(delta) => updateObjectScale(obj.id, delta)}
+                                    onRotate={(delta) => updateObjectRotation(obj.id, delta)}
                                     onPositionChange={(x, y) => updateObjectPosition(obj.id, x, y)}
                                 />
                             );

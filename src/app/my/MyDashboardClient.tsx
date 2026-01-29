@@ -4,7 +4,8 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Button, Card } from "@/components";
-import { BookOpen, Users, Layers, Plus, Trash2, X, Check } from "lucide-react";
+import { BookOpen, Users, Layers, Plus, Trash2, X, Check, Store, Edit2 } from "lucide-react";
+import FlipCardItem from "@/components/learning/FlipCardItem";
 
 type Tab = "books" | "characters" | "cards";
 
@@ -51,10 +52,42 @@ export default function MyDashboardClient({ books: initialBooks, characters, car
     const [selectedBookId, setSelectedBookId] = useState<string | null>(null);
 
     // Characters state
-    const [characterList, setCharacterList] = useState(characters);
     const [isCharSelectMode, setIsCharSelectMode] = useState(false);
+    const [characterList, setCharacterList] = useState(characters);
     const [selectedCharIds, setSelectedCharIds] = useState<Set<string>>(new Set());
     const [isDeletingChars, setIsDeletingChars] = useState(false);
+    const [editingCharId, setEditingCharId] = useState<string | null>(null);
+    const [editName, setEditName] = useState("");
+
+    // Character handlers
+    const startEditing = (char: Character) => {
+        setEditingCharId(char.id);
+        setEditName(char.name || "");
+    };
+
+    const cancelEditing = () => {
+        setEditingCharId(null);
+        setEditName("");
+    };
+
+    const saveCharacterName = async (id: string) => {
+        if (!editName.trim()) return;
+        try {
+            const res = await fetch(`/api/characters/${id}`, {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ name: editName }),
+            });
+            if (!res.ok) throw new Error("Update failed");
+
+            // 로컬 상태 업데이트
+            setCharacterList(prev => prev.map(c => c.id === id ? { ...c, name: editName } : c));
+            setEditingCharId(null);
+            router.refresh();
+        } catch (error) {
+            alert("이름 수정에 실패했습니다.");
+        }
+    };
 
     // Cards state
     const [cardList, setCardList] = useState(cards);
@@ -256,9 +289,8 @@ export default function MyDashboardClient({ books: initialBooks, characters, car
                             gap: "1.5rem",
                             minHeight: "400px",
                         }}>
-                            {/* 왼쪽: 선택된 책 표지 */}
                             <div style={{
-                                flex: "0 0 280px",
+                                flex: "0 0 320px",
                                 display: "flex",
                                 flexDirection: "column",
                                 alignItems: "center",
@@ -273,93 +305,128 @@ export default function MyDashboardClient({ books: initialBooks, characters, car
                                         if (!book) return null;
                                         const colors = ["#F472B6", "#60A5FA", "#A78BFA", "#34D399", "#FBBF24", "#FB923C"];
                                         const colorIndex = books.indexOf(book) % colors.length;
+                                        // 표지 유무와 상관없이 가로형(3:2)으로 통일 (삽화 비율과 일치)
+                                        const width = "240px";
+                                        const height = "160px";
+
                                         return (
                                             <>
                                                 {/* 책 표지 */}
                                                 <div style={{
-                                                    width: "180px",
-                                                    height: "240px",
-                                                    background: `linear-gradient(135deg, ${colors[colorIndex]} 0%, ${colors[(colorIndex + 1) % colors.length]} 100%)`,
-                                                    borderRadius: "8px 16px 16px 8px",
-                                                    boxShadow: "4px 4px 12px rgba(0,0,0,0.2)",
+                                                    width: width,
+                                                    height: height,
+                                                    background: `linear-gradient(135deg, ${colors[colorIndex]} 0%, ${colors[(colorIndex + 1) % colors.length]} 100%)`, // 기본 배경 (로딩 전/이미지 없을 때)
+                                                    borderRadius: "4px 12px 12px 4px", // 책 모양 살림
+                                                    boxShadow: "10px 10px 20px rgba(0,0,0,0.15)", // 그림자 강화
                                                     display: "flex",
                                                     flexDirection: "column",
                                                     alignItems: "center",
-                                                    justifyContent: "center",
-                                                    padding: "1rem",
-                                                    marginBottom: "1rem",
+                                                    justifyContent: "flex-end", // 텍스트 하단 배치
+                                                    padding: "0",
+                                                    marginBottom: "1.5rem",
                                                     position: "relative",
                                                     overflow: "hidden",
+                                                    transition: "all 0.3s ease"
                                                 }}>
-                                                    {/* 책등 효과 */}
+                                                    {/* 표지 이미지 (img 태그 사용으로 변경) */}
+                                                    {book.coverUrl && (
+                                                        <img
+                                                            src={book.coverUrl}
+                                                            alt="Book Cover"
+                                                            style={{
+                                                                position: "absolute",
+                                                                top: 0,
+                                                                left: 0,
+                                                                width: "100%",
+                                                                height: "100%",
+                                                                objectFit: "cover",
+                                                                zIndex: 0
+                                                            }}
+                                                        />
+                                                    )}
+                                                    {/* 책등 효과 (왼쪽) - 하드커버 느낌 */}
                                                     <div style={{
                                                         position: "absolute",
                                                         left: 0,
                                                         top: 0,
                                                         bottom: 0,
-                                                        width: "12px",
-                                                        background: `linear-gradient(to right, rgba(0,0,0,0.2), transparent)`,
-                                                        zIndex: 2,
+                                                        width: "16px",
+                                                        background: "rgba(0,0,0,0.15)",
+                                                        boxShadow: "inset -1px 0 2px rgba(255,255,255,0.3), inset 1px 0 2px rgba(0,0,0,0.2)",
+                                                        zIndex: 10,
                                                     }} />
-                                                    {/* 캐릭터 이미지 (있으면 표시) */}
-                                                    {book.coverUrl ? (
-                                                        <>
-                                                            {/* eslint-disable-next-line @next/next/no-img-element */}
-                                                            <img
-                                                                src={book.coverUrl}
-                                                                alt="cover"
-                                                                style={{
-                                                                    position: "absolute",
-                                                                    top: "50%",
-                                                                    left: "50%",
-                                                                    transform: "translate(-50%, -60%)",
-                                                                    width: "120px",
-                                                                    height: "120px",
-                                                                    objectFit: "contain",
-                                                                    filter: "drop-shadow(0 4px 8px rgba(0,0,0,0.2))",
-                                                                    zIndex: 1,
-                                                                }}
-                                                            />
-                                                            <div style={{
-                                                                position: "absolute",
-                                                                bottom: "1rem",
-                                                                color: "white",
-                                                                fontWeight: 700,
-                                                                fontSize: "1rem",
-                                                                textAlign: "center",
-                                                                textShadow: "0 1px 2px rgba(0,0,0,0.5)",
-                                                                zIndex: 1,
-                                                            }}>
-                                                                {book.title || "제목 없음"}
-                                                            </div>
-                                                        </>
-                                                    ) : (
-                                                        <>
-                                                            <BookOpen size={32} color="white" style={{ marginBottom: "0.5rem" }} />
-                                                            <div style={{
-                                                                color: "white",
-                                                                fontWeight: 700,
-                                                                fontSize: "1rem",
-                                                                textAlign: "center",
-                                                                textShadow: "0 1px 2px rgba(0,0,0,0.3)",
-                                                            }}>
-                                                                {book.title || "제목 없음"}
-                                                            </div>
-                                                            <div style={{
-                                                                color: "rgba(255,255,255,0.8)",
-                                                                fontSize: "0.75rem",
-                                                                marginTop: "0.25rem",
-                                                            }}>
-                                                                {book.sceneCount}페이지
-                                                            </div>
-                                                        </>
+
+                                                    {/* 책 펼침 효과 (오른쪽 끝) */}
+                                                    <div style={{
+                                                        position: "absolute",
+                                                        right: 0,
+                                                        top: 0,
+                                                        bottom: 0,
+                                                        width: "4px",
+                                                        background: "linear-gradient(to left, rgba(0,0,0,0.1), transparent)",
+                                                        zIndex: 10,
+                                                    }} />
+
+                                                    {/* 텍스트 가독성을 위한 그라데이션 오버레이 (이미지 있을 때만) */}
+                                                    {book.coverUrl && (
+                                                        <div style={{
+                                                            position: "absolute",
+                                                            inset: 0,
+                                                            background: "linear-gradient(to top, rgba(0,0,0,0.8) 0%, rgba(0,0,0,0) 60%)",
+                                                            zIndex: 1,
+                                                        }} />
                                                     )}
+
+                                                    {/* 콘텐츠 영역 */}
+                                                    <div style={{
+                                                        position: "relative",
+                                                        zIndex: 2,
+                                                        width: "100%",
+                                                        padding: "1rem 1rem 1rem 1.5rem", // 왼쪽 패딩(책등) 고려
+                                                        textAlign: "center",
+                                                        display: "flex",
+                                                        flexDirection: "column",
+                                                        alignItems: "center",
+                                                        justifyContent: "center",
+                                                        height: book.coverUrl ? "auto" : "100%",
+                                                    }}>
+                                                        {!book.coverUrl && (
+                                                            <BookOpen size={32} color="white" style={{ marginBottom: "0.5rem", opacity: 0.9 }} />
+                                                        )}
+
+                                                        <div style={{
+                                                            color: "white",
+                                                            fontWeight: 700,
+                                                            fontSize: "1.1rem",
+                                                            textShadow: "0 2px 4px rgba(0,0,0,0.5)",
+                                                            wordBreak: "keep-all",
+                                                            lineHeight: 1.3,
+                                                            marginBottom: "0.25rem"
+                                                        }}>
+                                                            {book.title || "제목 없음"}
+                                                        </div>
+
+                                                        <div style={{
+                                                            color: "rgba(255,255,255,0.9)",
+                                                            fontSize: "0.8rem",
+                                                            fontWeight: 500,
+                                                            display: "flex",
+                                                            alignItems: "center",
+                                                            gap: "0.25rem"
+                                                        }}>
+
+                                                            {book.status === "COMPLETED" && (
+                                                                <span style={{ backgroundColor: "rgba(255,255,255,0.2)", padding: "2px 6px", borderRadius: "10px", fontSize: "0.7rem" }}>완성</span>
+                                                            )}
+                                                        </div>
+                                                    </div>
                                                 </div>
+
                                                 {/* 버튼 */}
                                                 <Button
                                                     variant="primary"
                                                     onClick={() => router.push(`/story/${book.id}/view`)}
-                                                    style={{ width: "100%" }}
+                                                    style={{ width: "100%", borderRadius: "12px", height: "48px", fontSize: "1rem", fontWeight: 600 }}
                                                 >
                                                     <BookOpen size={18} style={{ marginRight: "0.5rem" }} />
                                                     동화책 펼치기
@@ -369,8 +436,19 @@ export default function MyDashboardClient({ books: initialBooks, characters, car
                                     })()
                                 ) : (
                                     <div style={{ textAlign: "center", color: "var(--muted-foreground)" }}>
-                                        <BookOpen size={48} style={{ marginBottom: "0.5rem", opacity: 0.5 }} />
-                                        <p>책을 선택해주세요</p>
+                                        <div style={{
+                                            width: "80px",
+                                            height: "80px",
+                                            backgroundColor: "rgba(0,0,0,0.05)",
+                                            borderRadius: "50%",
+                                            display: "flex",
+                                            alignItems: "center",
+                                            justifyContent: "center",
+                                            margin: "0 auto 1rem auto"
+                                        }}>
+                                            <BookOpen size={32} style={{ opacity: 0.3 }} />
+                                        </div>
+                                        <p style={{ fontWeight: 500 }}>오른쪽 책꽂이에서<br />책을 선택해주세요</p>
                                     </div>
                                 )}
                             </div>
@@ -468,65 +546,79 @@ export default function MyDashboardClient({ books: initialBooks, characters, car
                 <div>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
                         <h2 style={{ fontSize: "1.25rem", fontWeight: 600 }}>내 캐릭터</h2>
-                        {characterList.length > 0 && (
-                            <div style={{ display: "flex", gap: "0.5rem" }}>
-                                {isCharSelectMode ? (
-                                    <>
-                                        <Button variant="ghost" size="sm" onClick={() => { setIsCharSelectMode(false); setSelectedCharIds(new Set()); }}>
-                                            <X size={16} /> 취소
+                        <div style={{ display: "flex", gap: "0.5rem" }}>
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => router.push("/shop")}
+                                style={{ borderColor: "#8B5CF6", color: "#8B5CF6", backgroundColor: "white" }}
+                            >
+                                <Store size={16} style={{ marginRight: "0.4rem" }} />
+                                마법의 상점
+                            </Button>
+                            {characterList.length > 0 && (
+                                <>
+                                    {isCharSelectMode ? (
+                                        <>
+                                            <Button variant="ghost" size="sm" onClick={() => { setIsCharSelectMode(false); setSelectedCharIds(new Set()); }}>
+                                                <X size={16} /> 취소
+                                            </Button>
+                                            <Button
+                                                variant="primary"
+                                                size="sm"
+                                                onClick={handleDeleteChars}
+                                                disabled={selectedCharIds.size === 0 || isDeletingChars}
+                                                isLoading={isDeletingChars}
+                                                style={{ backgroundColor: "#E53935" }}
+                                            >
+                                                <Trash2 size={16} /> 삭제 ({selectedCharIds.size})
+                                            </Button>
+                                        </>
+                                    ) : (
+                                        <Button variant="ghost" size="sm" onClick={() => setIsCharSelectMode(true)}>
+                                            <Trash2 size={16} /> 선택
                                         </Button>
-                                        <Button
-                                            variant="primary"
-                                            size="sm"
-                                            onClick={handleDeleteChars}
-                                            disabled={selectedCharIds.size === 0 || isDeletingChars}
-                                            isLoading={isDeletingChars}
-                                            style={{ backgroundColor: "#E53935" }}
-                                        >
-                                            <Trash2 size={16} /> 삭제 ({selectedCharIds.size})
-                                        </Button>
-                                    </>
-                                ) : (
-                                    <Button variant="ghost" size="sm" onClick={() => setIsCharSelectMode(true)}>
-                                        <Trash2 size={16} /> 선택
-                                    </Button>
-                                )}
-                            </div>
-                        )}
+                                    )}
+                                </>
+                            )}
+                        </div>
                     </div>
                     {characterList.length === 0 ? (
                         <EmptyState message="아직 캐릭터가 없어요" action="/create/draw" actionLabel="동화책 만들며 캐릭터 추가" />
                     ) : (
-                        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(120px, 1fr))", gap: "1rem" }}>
+                        // 그리드 사이즈 확대 (120 -> 150) - 모바일 2열 가능하도록 조정
+                        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))", gap: "1rem" }}>
                             {characterList.map((char) => {
                                 const isSelected = selectedCharIds.has(char.id);
                                 return (
                                     <div
                                         key={char.id}
                                         onClick={() => isCharSelectMode && toggleCharSelect(char.id)}
-                                        style={{ cursor: isCharSelectMode ? "pointer" : "default" }}
+                                        style={{ cursor: isCharSelectMode ? "pointer" : "default", position: "relative" }}
                                     >
-                                        <Card padding="sm" style={{ border: isSelected ? "2px solid #E53935" : undefined }}>
+                                        <Card padding="none" style={{ border: isSelected ? "2px solid #E53935" : undefined, overflow: "hidden" }}>
                                             {isCharSelectMode && (
-                                                <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "0.25rem" }}>
+                                                <div style={{ position: "absolute", top: 8, right: 8, zIndex: 10 }}>
                                                     <div
                                                         style={{
-                                                            width: "20px",
-                                                            height: "20px",
+                                                            width: "24px",
+                                                            height: "24px",
                                                             borderRadius: "4px",
-                                                            border: isSelected ? "none" : "2px solid var(--border)",
-                                                            backgroundColor: isSelected ? "#E53935" : "transparent",
+                                                            border: isSelected ? "none" : "2px solid rgba(255,255,255,0.8)",
+                                                            backgroundColor: isSelected ? "#E53935" : "rgba(0,0,0,0.3)",
                                                             display: "flex",
                                                             alignItems: "center",
                                                             justifyContent: "center",
                                                             color: "white",
                                                         }}
                                                     >
-                                                        {isSelected && <Check size={12} />}
+                                                        {isSelected && <Check size={16} />}
                                                     </div>
                                                 </div>
                                             )}
-                                            <div style={{ aspectRatio: "1", backgroundColor: "var(--muted)", borderRadius: "8px", marginBottom: "0.5rem", overflow: "hidden" }}>
+
+                                            {/* 이미지 영역 */}
+                                            <div style={{ aspectRatio: "1", backgroundColor: "var(--muted)", overflow: "hidden", position: "relative" }}>
                                                 {char.imageUrl ? (
                                                     <img
                                                         src={char.imageUrl}
@@ -534,10 +626,63 @@ export default function MyDashboardClient({ books: initialBooks, characters, car
                                                         style={{ width: "100%", height: "100%", objectFit: "cover" }}
                                                     />
                                                 ) : (
-                                                    <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "2rem" }}>🎨</div>
+                                                    <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "3rem" }}>🎨</div>
                                                 )}
                                             </div>
-                                            <div style={{ fontWeight: 500, fontSize: "0.875rem", textAlign: "center" }}>{char.name || "이름 없음"}</div>
+
+                                            {/* 하단 정보 및 굿즈 버튼 */}
+                                            <div style={{ padding: "1rem", textAlign: "center" }}>
+                                                {editingCharId === char.id ? (
+                                                    <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", justifyContent: "center", marginBottom: "0.75rem" }}>
+                                                        <input
+                                                            type="text"
+                                                            value={editName}
+                                                            onChange={(e) => setEditName(e.target.value)}
+                                                            style={{
+                                                                width: "100%",
+                                                                padding: "0.25rem 0.5rem",
+                                                                borderRadius: "4px",
+                                                                border: "1px solid #8B5CF6",
+                                                                fontSize: "0.9rem",
+                                                                textAlign: "center"
+                                                            }}
+                                                            autoFocus
+                                                            onKeyDown={(e) => {
+                                                                if (e.key === "Enter") saveCharacterName(char.id);
+                                                                if (e.key === "Escape") cancelEditing();
+                                                            }}
+                                                            onClick={(e) => e.stopPropagation()}
+                                                        />
+                                                        <Button size="sm" onClick={(e) => { e.stopPropagation(); saveCharacterName(char.id); }} style={{ padding: "0.25rem 0.5rem", minWidth: "auto" }}>
+                                                            <Check size={14} />
+                                                        </Button>
+                                                    </div>
+                                                ) : (
+                                                    <div
+                                                        style={{
+                                                            fontWeight: 600,
+                                                            fontSize: "1rem",
+                                                            marginBottom: "0.75rem",
+                                                            color: "#1F2937",
+                                                            display: "flex",
+                                                            alignItems: "center",
+                                                            justifyContent: "center",
+                                                            gap: "0.5rem",
+                                                            cursor: "pointer"
+                                                        }}
+                                                        onClick={(e) => {
+                                                            if (!isCharSelectMode) {
+                                                                e.stopPropagation();
+                                                                startEditing(char);
+                                                            }
+                                                        }}
+                                                        title="클릭하여 이름 수정"
+                                                    >
+                                                        {char.name || "이름 없음"}
+                                                        {!isCharSelectMode && <Edit2 size={12} color="#9CA3AF" />}
+                                                    </div>
+                                                )}
+                                            </div>
                                         </Card>
                                     </div>
                                 );
@@ -581,73 +726,31 @@ export default function MyDashboardClient({ books: initialBooks, characters, car
                     {cardList.length === 0 ? (
                         <EmptyState message="아직 배운 단어가 없어요" action="/create/draw" actionLabel="동화책 만들며 단어 배우기" />
                     ) : (
-                        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(130px, 1fr))", gap: "1rem" }}>
+                        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))", gap: "1rem" }}>
+                            {/* 예시 카드 (Tutorial) */}
+                            <div style={{ height: "100%", aspectRatio: "3/4" }}>
+                                <FlipCardItem
+                                    card={{
+                                        id: "tutorial-card",
+                                        name: "눌러보세요!",
+                                        type: "튜토리얼",
+                                        color: "#F59E0B",
+                                        imagePath: null, // 기본 아이콘 표시됨
+                                    }}
+                                    isTutorial={true}
+                                />
+                            </div>
+
                             {cardList.map((card) => {
                                 const isSelected = selectedCardIds.has(card.id);
                                 return (
-                                    <div
-                                        key={card.id}
-                                        onClick={() => isCardSelectMode && toggleCardSelect(card.id)}
-                                        style={{
-                                            position: "relative",
-                                            cursor: isCardSelectMode ? "pointer" : "default"
-                                        }}
-                                    >
-                                        <Card padding="none" style={{
-                                            border: isSelected ? "2px solid #E53935" : `1px solid ${card.color || "#e5e7eb"}`,
-                                            overflow: "hidden",
-                                            height: "100%",
-                                            display: "flex",
-                                            flexDirection: "column"
-                                        }}>
-                                            {isCardSelectMode && (
-                                                <div style={{ position: "absolute", top: 8, right: 8, zIndex: 10 }}>
-                                                    <div
-                                                        style={{
-                                                            width: "20px",
-                                                            height: "20px",
-                                                            borderRadius: "4px",
-                                                            backgroundColor: isSelected ? "#E53935" : "white",
-                                                            border: isSelected ? "none" : "2px solid #E5E7EB",
-                                                            display: "flex",
-                                                            alignItems: "center",
-                                                            justifyContent: "center",
-                                                            color: "white",
-                                                        }}
-                                                    >
-                                                        {isSelected && <Check size={12} />}
-                                                    </div>
-                                                </div>
-                                            )}
-
-                                            <div style={{
-                                                aspectRatio: "1",
-                                                backgroundColor: `${card.color}10` || "#f3f4f6",
-                                                padding: "1rem",
-                                                display: "flex",
-                                                alignItems: "center",
-                                                justifyContent: "center"
-                                            }}>
-                                                {card.imagePath && (card.id.startsWith("pers-") || card.id.startsWith("place-")) ? (
-                                                    <img
-                                                        src={card.imagePath}
-                                                        alt={card.name}
-                                                        onError={(e) => {
-                                                            e.currentTarget.style.display = 'none';
-                                                            e.currentTarget.parentElement!.innerHTML = `<div style="font-size:2rem">🃏</div>`;
-                                                        }}
-                                                        style={{ width: "100%", height: "100%", objectFit: "cover" }}
-                                                    />
-                                                ) : (
-                                                    <div style={{ fontSize: "2.5rem" }}>🃏</div>
-                                                )}
-                                            </div>
-
-                                            <div style={{ padding: "0.75rem", textAlign: "center", flex: 1, display: "flex", flexDirection: "column", gap: "0.25rem" }}>
-                                                <div style={{ fontSize: "0.75rem", color: card.color || "#6B7280", fontWeight: 700 }}>{card.type}</div>
-                                                <div style={{ fontWeight: 600, fontSize: "0.95rem", color: "#1F2937", wordBreak: "keep-all" }}>{card.name}</div>
-                                            </div>
-                                        </Card>
+                                    <div key={card.id} style={{ height: "100%", aspectRatio: "3/4" }}>
+                                        <FlipCardItem
+                                            card={card}
+                                            isSelected={isSelected}
+                                            isSelectMode={isCardSelectMode}
+                                            onToggleSelect={() => toggleCardSelect(card.id)}
+                                        />
                                     </div>
                                 );
                             })}

@@ -21,15 +21,12 @@ const CreateSceneSchema = z.object({
     resultChoice: z.enum(["SUCCESS", "SILLY", "NEXT"]),
     bookId: z.string().uuid().optional(), // 동화책에 추가하는 경우
     sceneImagePath: z.string().min(1).optional(),
-    cards: z
-        .array(
-            z.object({
-                ko: z.string().min(1),
-                en: z.string().min(1),
-                order: z.number().int().min(0).max(2),
-            })
-        )
-        .length(3),
+    cards: z.array(z.object({
+        type: z.string(),
+        ko: z.string(),
+        en: z.string(),
+        order: z.number().optional()
+    })).optional(),
 });
 
 export async function GET() {
@@ -38,7 +35,7 @@ export async function GET() {
 
         const scenes = await prisma.scene.findMany({
             where: { userId },
-            include: { cards: { orderBy: { order: "asc" } }, character: true },
+            include: { character: true },
             orderBy: { createdAt: "desc" },
         });
 
@@ -92,12 +89,25 @@ export async function POST(req: Request) {
                 bookId: input.bookId,
                 order,
                 sceneImagePath: input.sceneImagePath,
-                cards: {
-                    create: input.cards.map((c) => ({ ko: c.ko, en: c.en, order: c.order })),
-                },
             },
-            include: { cards: { orderBy: { order: "asc" } } },
+            include: { character: true },
         });
+
+        // 카드 생성 (보너스 단어) - 동화책에 속한 경우만 저장
+        if (input.bookId && input.cards && input.cards.length > 0) {
+            await Promise.all(input.cards.map(card =>
+                prisma.card.create({
+                    data: {
+                        userId,
+                        bookId: input.bookId,
+                        type: card.type,
+                        name: card.ko,
+                        desc: card.en, // 영문명을 설명으로 저장
+                        // color: ... (optional)
+                    }
+                })
+            ));
+        }
 
         // 💧 물방울 보상
         const rewards: Array<{ type: string; reason: string; delta: number }> = [];

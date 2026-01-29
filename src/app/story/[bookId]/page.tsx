@@ -26,7 +26,7 @@ export default async function BookDetailPage({ params }: PageProps) {
         where: { id: bookId, userId: data.user.id },
         include: {
             scenes: {
-                include: { character: true, cards: true },
+                include: { character: true },
                 orderBy: { order: "asc" },
             },
         },
@@ -91,7 +91,7 @@ export default async function BookDetailPage({ params }: PageProps) {
                                             {scene.character?.name || "캐릭터"}가 {scene.backgroundId}에서
                                         </div>
                                         <div style={{ fontSize: "0.875rem", color: "var(--muted-foreground)" }}>
-                                            {scene.verbId} · {scene.cards.length}개 단어
+                                            {scene.verbId}
                                         </div>
                                     </div>
                                     <Check size={20} color="var(--muted-foreground)" />

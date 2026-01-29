@@ -5,6 +5,7 @@ import { prisma } from "@/lib/db";
 import { Button, Card } from "@/components";
 import StoryFlowLayout from "@/components/layout/StoryFlowLayout";
 import { Home, Plus, BookOpen, RotateCcw } from "lucide-react";
+import ReadAloudButton from "@/components/story/ReadAloudButton";
 
 interface PageProps {
     params: Promise<{ bookId: string }>;
@@ -36,9 +37,10 @@ export default async function BookCompletePage({ params }: PageProps) {
             },
             include: {
                 scenes: {
-                    include: { cards: true, character: true },
+                    include: { character: true },
                     orderBy: { order: "asc" },
                 },
+                cards: true,
             },
         });
     });
@@ -47,30 +49,29 @@ export default async function BookCompletePage({ params }: PageProps) {
         notFound();
     }
 
-    const allCards = book.scenes.flatMap((s) => s.cards);
     const sceneCount = book.scenes.length;
+    const cardCount = book.cards?.length ?? 0;
 
     return (
         <StoryFlowLayout
             currentStep={4}
             title="동화책 완성! 🎉"
             subtitle={`"${book.title}" 동화책이 완성되었어요`}
-            bookTitle={book.title || "동화책"}
         >
             {/* 통계 */}
             <div style={{ display: "flex", justifyContent: "center", gap: "1rem", marginBottom: "2rem" }}>
                 <StatCard label="장면" value={sceneCount} />
-                <StatCard label="배운 단어" value={allCards.length} />
+                <StatCard label="카드" value={cardCount} />
             </div>
 
-            {/* 단어 카드 */}
-            {allCards.length > 0 && (
+            {/* 카드 목록 */}
+            {book.cards && book.cards.length > 0 && (
                 <section style={{ marginBottom: "2rem" }}>
                     <h3 style={{ fontSize: "0.875rem", fontWeight: 600, marginBottom: "0.75rem", color: "var(--muted-foreground)" }}>
-                        배운 단어들
+                        모은 카드들
                     </h3>
                     <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem" }}>
-                        {allCards.map((card, i) => (
+                        {book.cards.map((card, i) => (
                             <div
                                 key={i}
                                 style={{
@@ -81,13 +82,21 @@ export default async function BookCompletePage({ params }: PageProps) {
                                     fontSize: "0.8rem",
                                 }}
                             >
-                                <span style={{ fontWeight: 600 }}>{card.ko}</span>
-                                <span style={{ color: "var(--muted-foreground)", marginLeft: "0.375rem" }}>{card.en}</span>
+                                <span style={{ fontWeight: 600, color: card.color || undefined }}>{card.name}</span>
+                                <span style={{ color: "var(--muted-foreground)", marginLeft: "0.375rem" }}>{card.type}</span>
                             </div>
                         ))}
                     </div>
                 </section>
             )}
+
+            {/* 읽어주기 버튼 */}
+            <div style={{ marginBottom: "1.5rem" }}>
+                <ReadAloudButton
+                    text={book.scenes.map(s => s.storyText).filter(Boolean).join(". ")}
+                    label="🔊 동화책 전체 듣기"
+                />
+            </div>
 
             {/* 액션 버튼 */}
             <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>

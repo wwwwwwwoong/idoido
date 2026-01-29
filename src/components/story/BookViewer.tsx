@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
+import Image from "next/image";
 import { motion, AnimatePresence } from "framer-motion";
-import { ChevronLeft, ChevronRight, Volume2, VolumeX } from "lucide-react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 
 // 배경 정의
 const BACKGROUNDS: Record<string, { gradient: string; name: string }> = {
@@ -29,6 +30,7 @@ export interface SceneData {
     backgroundId: string;
     storyText: string | null;
     objects: SceneObject[] | null;
+    sceneImagePath?: string;
 }
 
 export interface BookData {
@@ -37,6 +39,7 @@ export interface BookData {
     status: string;
     scenes: SceneData[];
     coverColor?: string;
+    coverPath?: string;
 }
 
 interface Props {
@@ -47,7 +50,6 @@ interface Props {
 
 export default function BookViewer({ book, characterImageUrl, className }: Props) {
     const [currentPage, setCurrentPage] = useState(-1); // -1: 표지
-    const [isMuted, setIsMuted] = useState(false);
 
     // totalPages calculation updated to be safe
     const totalPages = book.scenes ? book.scenes.length : 0;
@@ -55,26 +57,14 @@ export default function BookViewer({ book, characterImageUrl, className }: Props
     const colors = ["#F472B6", "#60A5FA", "#A78BFA", "#34D399", "#FBBF24", "#FB923C"];
     const coverColor = book.coverColor || colors[0];
 
-    // 페이지 넘기기 사운드
-    const playPageTurnSound = () => {
-        if (isMuted) return;
-        try {
-            const audio = new Audio("/sounds/page-turn.mp3");
-            audio.volume = 0.3;
-            audio.play().catch(() => { });
-        } catch { }
-    };
-
     const handleNextPage = () => {
         if (currentPage < totalPages - 1) {
-            playPageTurnSound();
             setCurrentPage(prev => prev + 1);
         }
     };
 
     const handlePrevPage = () => {
         if (currentPage > -1) {
-            playPageTurnSound();
             setCurrentPage(prev => prev - 1);
         }
     };
@@ -90,7 +80,6 @@ export default function BookViewer({ book, characterImageUrl, className }: Props
     }, [currentPage, totalPages]);
 
     const currentScene = currentPage >= 0 && book.scenes ? book.scenes[currentPage] : null;
-    // Default to a fallback gradient if backgroundId is missing or invalid
     const bgGradient = currentScene?.backgroundId
         ? BACKGROUNDS[currentScene.backgroundId]?.gradient || BACKGROUNDS.forest.gradient
         : coverColor;
@@ -103,37 +92,9 @@ export default function BookViewer({ book, characterImageUrl, className }: Props
                 width: "100%",
                 height: "100%",
                 overflow: "hidden",
-                backgroundColor: "#f0f0f0", // basic fallback
+                backgroundColor: "#f0f0f0",
             }}
         >
-            {/* 사운드 토글 */}
-            <div style={{
-                position: "absolute",
-                top: "1rem",
-                right: "1rem",
-                zIndex: 20,
-            }}>
-                <button
-                    onClick={() => setIsMuted(!isMuted)}
-                    style={{
-                        width: "40px",
-                        height: "40px",
-                        borderRadius: "50%",
-                        background: "rgba(255,255,255,0.2)",
-                        backdropFilter: "blur(8px)",
-                        border: "none",
-                        cursor: "pointer",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        color: "white",
-                    }}
-                >
-                    {isMuted ? <VolumeX size={20} /> : <Volume2 size={20} />}
-                </button>
-            </div>
-
-            {/* 페이지 콘텐츠 */}
             <AnimatePresence mode="wait">
                 {currentPage === -1 ? (
                     // 표지
@@ -145,9 +106,13 @@ export default function BookViewer({ book, characterImageUrl, className }: Props
                         style={{
                             width: "100%",
                             height: "100%",
-                            background: `linear-gradient(135deg, ${coverColor} 0%, #A78BFA 50%, #60A5FA 100%)`,
+                            // 이미지가 있을 경우 배경을 투명하게 하거나 제거
+                            background: (book.coverPath?.startsWith("http") || book.coverPath?.startsWith("data:"))
+                                ? "transparent"
+                                : `linear-gradient(135deg, ${coverColor} 0%, #A78BFA 50%, #60A5FA 100%)`,
                             display: "flex",
                             flexDirection: "column",
+                            // 스타일 복구
                             alignItems: "center",
                             justifyContent: "center",
                             color: "white",
@@ -157,16 +122,48 @@ export default function BookViewer({ book, characterImageUrl, className }: Props
                             overflow: "hidden",
                         }}
                     >
-                        {/* 장식 패턴 */}
-                        <div style={{
-                            position: "absolute",
-                            inset: 0,
-                            backgroundImage: "radial-gradient(circle at 20% 20%, rgba(255,255,255,0.2) 0%, transparent 40%)",
-                            pointerEvents: "none",
-                        }} />
 
-                        {/* 캐릭터 이미지 */}
-                        {characterImageUrl && (
+                        {/* 배경 이미지 (Next.js Image 최적화) */}
+                        {(book.coverPath?.startsWith("http") || book.coverPath?.startsWith("data:")) ? (
+                            <Image
+                                src={book.coverPath}
+                                alt="Cover"
+                                fill
+                                priority
+                                unoptimized
+                                style={{ objectFit: "cover" }}
+                                sizes="(max-width: 768px) 100vw, 800px"
+                            />
+                        ) : (
+                            <div style={{
+                                position: "absolute",
+                                inset: 0,
+                                background: `linear-gradient(135deg, ${coverColor} 0%, #A78BFA 50%, #60A5FA 100%)`,
+                                zIndex: -1,
+                            }} />
+                        )}
+
+                        {/* 배경 이미지 오버레이 (이미지 있을 때만 살짝 어둡게) */}
+                        {(book.coverPath?.startsWith("http") || book.coverPath?.startsWith("data:")) && (
+                            <div style={{
+                                position: "absolute",
+                                inset: 0,
+                                backgroundColor: "rgba(0,0,0,0.15)",
+                            }} />
+                        )}
+
+                        {/* 장식 패턴 (이미지 없을 때만) */}
+                        {!(book.coverPath?.startsWith("http") || book.coverPath?.startsWith("data:")) && (
+                            <div style={{
+                                position: "absolute",
+                                inset: 0,
+                                backgroundImage: "radial-gradient(circle at 20% 20%, rgba(255,255,255,0.2) 0%, transparent 40%)",
+                                pointerEvents: "none",
+                            }} />
+                        )}
+
+                        {/* 캐릭터 이미지 (표지 이미지가 없을 때만 표시) */}
+                        {characterImageUrl && !(book.coverPath?.startsWith("http") || book.coverPath?.startsWith("data:")) && (
                             <div style={{
                                 marginBottom: "1.5rem",
                                 position: "relative",
@@ -178,15 +175,20 @@ export default function BookViewer({ book, characterImageUrl, className }: Props
                                     borderRadius: "50%",
                                     filter: "blur(20px)",
                                 }} />
-                                <img
+                                {/* 캐릭터는 Next.js Image로 최적화 (안정성을 위해 unoptimized) */}
+                                <Image
                                     src={characterImageUrl}
                                     alt="캐릭터"
+                                    width={200}
+                                    height={200}
+                                    unoptimized
                                     style={{
                                         width: "150px",
                                         height: "150px",
                                         objectFit: "contain",
                                         filter: "drop-shadow(0 8px 16px rgba(0,0,0,0.2))",
                                         position: "relative",
+                                        zIndex: 10
                                     }}
                                 />
                             </div>
@@ -194,27 +196,25 @@ export default function BookViewer({ book, characterImageUrl, className }: Props
 
                         {/* 제목 */}
                         <div style={{
-                            fontSize: "2.5rem",
+                            fontSize: "3rem",
                             fontWeight: 700,
                             marginBottom: "0.75rem",
                             fontFamily: "'Gaegu', cursive",
-                            textShadow: "0 2px 8px rgba(0,0,0,0.2)",
+                            textShadow: `
+                                2px 2px 0 #000,
+                                -1px -1px 0 #000,  
+                                1px -1px 0 #000,
+                                -1px 1px 0 #000,
+                                1px 1px 0 #000,
+                                0 4px 8px rgba(0,0,0,0.5)
+                            `,
+                            color: "white",
                             wordBreak: "keep-all",
                             position: "relative",
+                            zIndex: 10,
+                            padding: "0 1rem",
                         }}>
                             {book.title || "나의 동화책"}
-                        </div>
-
-                        {/* 페이지 수 */}
-                        <div style={{
-                            fontSize: "1rem",
-                            opacity: 0.9,
-                            backgroundColor: "rgba(255,255,255,0.2)",
-                            padding: "0.5rem 1rem",
-                            borderRadius: "20px",
-                            backdropFilter: "blur(4px)",
-                        }}>
-                            📖 {totalPages}페이지
                         </div>
                     </motion.div>
                 ) : (
@@ -235,16 +235,18 @@ export default function BookViewer({ book, characterImageUrl, className }: Props
                     >
                         {/* 장면 영역 (이미지/오브젝트) */}
                         <div style={{ flex: 1, position: "relative", width: "100%", height: "100%" }}>
-                            {/* Scene Image (If generated) */}
-                            {/* In the new flow, we might have a full scene image. 
-                                Or we might still have individual objects. 
-                                Ideally, we prioritize the full scene image if available. */}
-                            {(currentScene as any).sceneImagePath ? (
-                                <img
-                                    src={(currentScene as any).sceneImagePath}
-                                    alt="장면"
-                                    style={{ width: "100%", height: "100%", objectFit: "cover" }}
-                                />
+                            {currentScene?.sceneImagePath ? (
+                                <div style={{ width: "100%", height: "100%", position: "relative" }}>
+                                    <Image
+                                        src={currentScene.sceneImagePath}
+                                        alt="장면"
+                                        fill
+                                        priority={true}
+                                        unoptimized
+                                        style={{ objectFit: "contain" }}
+                                    />
+                                    {/* Fallback이나 로딩 상태 처리는 필요 시 추가 */}
+                                </div>
                             ) : (
                                 currentScene?.objects?.map((obj) => (
                                     <div
@@ -257,10 +259,16 @@ export default function BookViewer({ book, characterImageUrl, className }: Props
                                         }}
                                     >
                                         {obj.type === "character" && characterImageUrl && (
-                                            <img
+                                            <Image
                                                 src={characterImageUrl}
                                                 alt="캐릭터"
+                                                width={200}
+                                                height={200}
+                                                priority
                                                 style={{ width: "120px", height: "120px", objectFit: "contain" }}
+                                                onError={() => {
+                                                    // Image onError 처리 (필요시 상태 관리)
+                                                }}
                                             />
                                         )}
                                     </div>
@@ -268,7 +276,7 @@ export default function BookViewer({ book, characterImageUrl, className }: Props
                             )}
                         </div>
 
-                        {/* 텍스트 영역 - Overlay at bottom */}
+                        {/* 텍스트 영역 */}
                         <div style={{
                             position: "absolute",
                             bottom: 0,
@@ -285,7 +293,7 @@ export default function BookViewer({ book, characterImageUrl, className }: Props
                                 fontWeight: 500,
                                 textShadow: "0 2px 4px rgba(0,0,0,0.5)",
                                 wordBreak: "keep-all",
-                                whiteSpace: "pre-wrap", // Preserve newlines
+                                whiteSpace: "pre-wrap",
                             }}>
                                 {currentScene?.storyText || "이야기가 없습니다."}
                             </div>
@@ -302,7 +310,7 @@ export default function BookViewer({ book, characterImageUrl, className }: Props
                 )}
             </AnimatePresence>
 
-            {/* 네비게이션 버튼 */}
+            {/* 네비게이션 버튼 - 왼쪽 */}
             <button
                 onClick={handlePrevPage}
                 disabled={currentPage === -1}
@@ -330,6 +338,7 @@ export default function BookViewer({ book, characterImageUrl, className }: Props
                 <ChevronLeft size={24} />
             </button>
 
+            {/* 네비게이션 버튼 - 오른쪽 */}
             <button
                 onClick={handleNextPage}
                 disabled={currentPage >= totalPages - 1}
@@ -356,6 +365,20 @@ export default function BookViewer({ book, characterImageUrl, className }: Props
             >
                 <ChevronRight size={24} />
             </button>
+
+            {/* 다음 페이지 프리로딩 (숨김 처리하여 미리 리소스 확보) */}
+            {currentPage < totalPages - 1 && book.scenes && book.scenes[currentPage + 1]?.sceneImagePath && (
+                <div style={{ position: "fixed", left: "-9999px", top: 0, width: "100vw", height: "100vh", pointerEvents: "none", opacity: 0 }}>
+                    <Image
+                        src={book.scenes[currentPage + 1].sceneImagePath!}
+                        alt="preload"
+                        fill
+                        priority
+                        unoptimized
+                        sizes="100vw"
+                    />
+                </div>
+            )}
         </div>
     );
 }

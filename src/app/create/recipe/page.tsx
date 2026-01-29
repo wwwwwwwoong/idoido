@@ -27,13 +27,17 @@ const helperResponses: Record<string, string> = {
     "pers-shy": "수줍은 친구도 멋진 주인공이 될 수 있어!",
     "pers-playful": "장난꾸러기! 신나는 이야기가 되겠다!",
     "pers-wise": "똑똑한 친구네! 지혜로운 결정을 하겠다!",
+    "pers-energetic": "씩씩한 친구구나! 힘이 넘치겠다!",
+    "pers-calm": "차분한 친구네! 여유롭게 해결하겠다!",
     // 역할
     "role-explorer": "탐험가라니! 어디로 떠날까?",
     "role-helper": "도우미! 누구를 도와줄까?",
     "role-friend": "친구가 되어주는 거구나! 따뜻하겠다~",
     "role-hero": "영웅! 멋진 활약이 기대돼!",
-    "role-dreamer": "꿈꾸는 이! 상상의 나래를 펴자!",
-    "role-creator": "만드는 이! 뭘 만들어볼까?",
+    "role-wizard": "마법사! 어떤 마법을 부릴까?",
+    "role-inventor": "발명가! 멋진 발명품을 만들겠다!",
+    "role-chef": "요리사! 맛있는 음식을 만들겠다!",
+    "role-storyteller": "이야기꾼! 재미있는 이야기가 나올 거야!",
     // 장소
     "place-forest": "신비로운 숲에서 무슨 일이 생길까?",
     "place-ocean": "바다 속 모험이라니! 인어를 만날까?",
@@ -41,19 +45,26 @@ const helperResponses: Record<string, string> = {
     "place-village": "아늑한 마을이네! 좋은 이웃들이 있겠다~",
     "place-mountain": "높은 산에서 뭘 발견할까?",
     "place-school": "마법 학교! 신기한 걸 배우겠다!",
+    "place-space": "우주라니! 별들을 만날 수 있겠다!",
+    "place-candy": "과자 마을! 달콤한 모험이 기대돼!",
     // 사건
     "event-adventure": "두근두근 모험! 신나겠다!",
     "event-friend": "새 친구를 만나는 거야? 설레겠다!",
     "event-mystery": "비밀이라니! 무슨 비밀일까?",
     "event-help": "따뜻한 마음을 가졌구나!",
-    "event-dream": "꿈을 이루는 이야기! 멋지다!",
+    "event-magic": "마법 배우기! 신비한 마법을 익히겠다!",
     "event-treasure": "보물찾기! 뭘 찾게 될까?",
+    "event-party": "신나는 파티! 즐거운 일이 생기겠다!",
+    "event-growth": "성장하는 이야기! 멋진 변화가 있을 거야!",
     // 분위기
     "mood-warm": "따뜻한 이야기가 될 거야~",
     "mood-exciting": "신나는 이야기! 재밌겠다!",
     "mood-calm": "잔잔하고 평화로운 느낌이네!",
     "mood-magical": "마법 같은 일이 일어날 거야!",
     "mood-funny": "웃긴 이야기! 기대돼!",
+    "mood-scary": "으스스한 이야기! 긴장되겠다!",
+    "mood-mysterious": "신비로운 분위기! 비밀이 많겠다!",
+    "mood-flutter": "설레는 이야기! 두근두근 기대된다!",
     // 학습 주제
     "topic-emotion": "감정을 탐험하는 이야기! 함께 느껴보자!",
     "topic-expression": "말하기 연습을 할 거야! 인사도 배우고!",
@@ -125,6 +136,9 @@ export default function CreateRecipePage() {
     };
 
     const handleNext = () => {
+        // 새 레시피 저장 시 이전 장면 데이터 초기화
+        localStorage.removeItem("create_scene");
+
         localStorage.setItem("create_recipe", JSON.stringify({
             personality: selections.personality,
             role: selections.role,
@@ -204,10 +218,8 @@ export default function CreateRecipePage() {
                                     const isSelected = selected?.id === card.id;
                                     const IconComponent = getIcon(card.icon);
 
-                                    // 이미지 경로 생성 (성격, 장소만 우선 적용)
-                                    // 이미지 경로 생성 (성격, 장소만 이미지 적용, 나머지는 아이콘)
-                                    const useImage = ["personality", "place"].includes(category.key);
-                                    const imagePath = useImage ? card.imagePath : null;
+                                    // 이미지 경로 생성 (모든 카테고리에 이미지 적용)
+                                    const imagePath = card.imagePath;
 
                                     return (
                                         <motion.button
@@ -243,19 +255,7 @@ export default function CreateRecipePage() {
                                                 backgroundColor: `${card.color}15` || "#f3f4f6", // Light background
                                                 padding: "1rem"
                                             }}>
-                                                {/* Fallback Icon (Always rendered behind) */}
-                                                <div style={{
-                                                    position: "absolute",
-                                                    inset: 0,
-                                                    display: "flex",
-                                                    alignItems: "center",
-                                                    justifyContent: "center",
-                                                    opacity: 0.5
-                                                }}>
-                                                    <IconComponent size={40} color={card.color} strokeWidth={1.5} />
-                                                </div>
-
-                                                {/* Image (If valid category) */}
+                                                {/* Image */}
                                                 {imagePath ? (
                                                     <img
                                                         src={imagePath}

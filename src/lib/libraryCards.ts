@@ -13,6 +13,10 @@ export const personalityCards: LibraryCard[] = [
         color: "#3B82F6",
         bgColor: "#DBEAFE",
         imagePath: "/images/cards/pers-brave.webp",
+        learningContent: {
+            korean: "용감한",
+            english: "Brave",
+        }
     },
     {
         id: "pers-kind",
@@ -23,6 +27,10 @@ export const personalityCards: LibraryCard[] = [
         color: "#EC4899",
         bgColor: "#FCE7F3",
         imagePath: "/images/cards/pers-kind.webp",
+        learningContent: {
+            korean: "다정한",
+            english: "Kind",
+        }
     },
     {
         id: "pers-curious",
@@ -33,6 +41,10 @@ export const personalityCards: LibraryCard[] = [
         color: "#F97316",
         bgColor: "#FFEDD5",
         imagePath: "/images/cards/pers-curious.webp",
+        learningContent: {
+            korean: "호기심 많은",
+            english: "Curious",
+        }
     },
     {
         id: "pers-shy",
@@ -43,6 +55,10 @@ export const personalityCards: LibraryCard[] = [
         color: "#A855F7",
         bgColor: "#F3E8FF",
         imagePath: "/images/cards/pers-shy.webp",
+        learningContent: {
+            korean: "수줍은",
+            english: "Shy",
+        }
     },
     {
         id: "pers-playful",
@@ -53,6 +69,10 @@ export const personalityCards: LibraryCard[] = [
         color: "#22C55E",
         bgColor: "#DCFCE7",
         imagePath: "/images/cards/pers-playful.webp",
+        learningContent: {
+            korean: "장난꾸러기",
+            english: "Playful",
+        }
     },
     {
         id: "pers-wise",
@@ -63,6 +83,38 @@ export const personalityCards: LibraryCard[] = [
         color: "#EAB308",
         bgColor: "#FEF9C3",
         imagePath: "/images/cards/pers-wise.webp",
+        learningContent: {
+            korean: "똑똑한",
+            english: "Smart",
+        }
+    },
+    {
+        id: "pers-energetic",
+        category: "personality",
+        name: "씩씩한",
+        description: "활기차고 에너지 넘치는",
+        icon: "Zap",
+        color: "#F97316",
+        bgColor: "#FFEDD5",
+        imagePath: "/images/cards/pers-energetic.webp",
+        learningContent: {
+            korean: "씩씩한",
+            english: "Energetic",
+        }
+    },
+    {
+        id: "pers-calm",
+        category: "personality",
+        name: "차분한",
+        description: "침착하고 여유로운",
+        icon: "Moon",
+        color: "#6366F1",
+        bgColor: "#E0E7FF",
+        imagePath: "/images/cards/pers-calm.webp",
+        learningContent: {
+            korean: "차분한",
+            english: "Calm",
+        }
     },
 ];
 
@@ -79,6 +131,10 @@ export const roleCards: LibraryCard[] = [
         color: "#F97316",
         bgColor: "#FFEDD5",
         imagePath: "/images/cards/role-explorer.webp",
+        learningContent: {
+            korean: "탐험가",
+            english: "Explorer",
+        }
     },
     {
         id: "role-helper",
@@ -89,6 +145,10 @@ export const roleCards: LibraryCard[] = [
         color: "#EC4899",
         bgColor: "#FCE7F3",
         imagePath: "/images/cards/role-helper.webp",
+        learningContent: {
+            korean: "도우미",
+            english: "Helper",
+        }
     },
     {
         id: "role-friend",
@@ -99,6 +159,10 @@ export const roleCards: LibraryCard[] = [
         color: "#22C55E",
         bgColor: "#DCFCE7",
         imagePath: "/images/cards/role-friend.webp",
+        learningContent: {
+            korean: "친구",
+            english: "Friend",
+        }
     },
     {
         id: "role-hero",
@@ -109,26 +173,66 @@ export const roleCards: LibraryCard[] = [
         color: "#3B82F6",
         bgColor: "#DBEAFE",
         imagePath: "/images/cards/role-hero.webp",
+        learningContent: {
+            korean: "영웅",
+            english: "Hero",
+        }
     },
     {
-        id: "role-dreamer",
+        id: "role-wizard",
         category: "role",
-        name: "꿈꾸는 이",
-        description: "상상의 나래를 펴는",
-        icon: "Cloud",
+        name: "마법사",
+        description: "신비한 마법을 부리는",
+        icon: "Wand2",
         color: "#A855F7",
         bgColor: "#F3E8FF",
-        imagePath: "/images/cards/role-dreamer.webp",
+        imagePath: "/images/cards/role-wizard.webp",
+        learningContent: {
+            korean: "마법사",
+            english: "Wizard",
+        }
     },
     {
-        id: "role-creator",
+        id: "role-inventor",
         category: "role",
-        name: "만드는 이",
-        description: "무언가를 창조하는",
-        icon: "Palette",
+        name: "발명가",
+        description: "새로운 것을 발명하는",
+        icon: "Lightbulb",
         color: "#14B8A6",
         bgColor: "#CCFBF1",
-        imagePath: "/images/cards/role-creator.webp",
+        imagePath: "/images/cards/role-inventor.webp",
+        learningContent: {
+            korean: "발명가",
+            english: "Inventor",
+        }
+    },
+    {
+        id: "role-chef",
+        category: "role",
+        name: "요리사",
+        description: "맛있는 음식을 만드는",
+        icon: "ChefHat",
+        color: "#EF4444",
+        bgColor: "#FEE2E2",
+        imagePath: "/images/cards/role-chef.webp",
+        learningContent: {
+            korean: "요리사",
+            english: "Chef",
+        }
+    },
+    {
+        id: "role-storyteller",
+        category: "role",
+        name: "이야기꾼",
+        description: "재미있는 이야기를 들려주는",
+        icon: "BookOpen",
+        color: "#0EA5E9",
+        bgColor: "#E0F2FE",
+        imagePath: "/images/cards/role-storyteller.webp",
+        learningContent: {
+            korean: "이야기꾼",
+            english: "Storyteller",
+        }
     },
 ];
 
@@ -146,6 +250,10 @@ export const placeCards: LibraryCard[] = [
         bgColor: "#DCFCE7",
         tags: ["자연", "신비로운", "모험"],
         imagePath: "/images/cards/place-forest.webp",
+        learningContent: {
+            korean: "숲",
+            english: "Forest",
+        }
     },
     {
         id: "place-ocean",
@@ -157,6 +265,10 @@ export const placeCards: LibraryCard[] = [
         bgColor: "#E0F2FE",
         tags: ["자연", "신비로운", "넓은"],
         imagePath: "/images/cards/place-ocean.webp",
+        learningContent: {
+            korean: "바다",
+            english: "Ocean",
+        }
     },
     {
         id: "place-palace",
@@ -168,6 +280,10 @@ export const placeCards: LibraryCard[] = [
         bgColor: "#EDE9FE",
         tags: ["왕족", "하늘", "화려한"],
         imagePath: "/images/cards/place-palace.webp",
+        learningContent: {
+            korean: "궁전",
+            english: "Palace",
+        }
     },
     {
         id: "place-village",
@@ -179,6 +295,10 @@ export const placeCards: LibraryCard[] = [
         bgColor: "#FEF3C7",
         tags: ["따뜻한", "일상", "평화로운"],
         imagePath: "/images/cards/place-village.webp",
+        learningContent: {
+            korean: "마을",
+            english: "Village",
+        }
     },
     {
         id: "place-mountain",
@@ -190,6 +310,10 @@ export const placeCards: LibraryCard[] = [
         bgColor: "#F3F4F6",
         tags: ["자연", "모험", "높은"],
         imagePath: "/images/cards/place-mountain.webp",
+        learningContent: {
+            korean: "산",
+            english: "Mountain",
+        }
     },
     {
         id: "place-school",
@@ -201,6 +325,10 @@ export const placeCards: LibraryCard[] = [
         bgColor: "#E0E7FF",
         tags: ["학교", "마법", "배움"],
         imagePath: "/images/cards/place-school.webp",
+        learningContent: {
+            korean: "학교",
+            english: "School",
+        }
     },
     {
         id: "place-space",
@@ -212,6 +340,10 @@ export const placeCards: LibraryCard[] = [
         bgColor: "#DBEAFE",
         tags: ["우주", "탐험", "신비로운"],
         imagePath: "/images/cards/place-space.webp",
+        learningContent: {
+            korean: "우주",
+            english: "Space",
+        }
     },
     {
         id: "place-candy",
@@ -223,6 +355,10 @@ export const placeCards: LibraryCard[] = [
         bgColor: "#FDF2F8",
         tags: ["달콤한", "판타지", "귀여운"],
         imagePath: "/images/cards/place-candy.webp",
+        learningContent: {
+            korean: "사탕",
+            english: "Candy",
+        }
     },
 ];
 
@@ -240,6 +376,10 @@ export const eventCards: LibraryCard[] = [
         bgColor: "#FFEDD5",
         tags: ["모험", "용감한", "탐험"],
         imagePath: "/images/cards/event-adventure.webp",
+        learningContent: {
+            korean: "모험",
+            english: "Adventure",
+        }
     },
     {
         id: "event-friend",
@@ -251,6 +391,10 @@ export const eventCards: LibraryCard[] = [
         bgColor: "#FCE7F3",
         tags: ["우정", "따뜻한", "만남"],
         imagePath: "/images/cards/event-friend.webp",
+        learningContent: {
+            korean: "친구",
+            english: "Friend",
+        }
     },
     {
         id: "event-mystery",
@@ -262,6 +406,10 @@ export const eventCards: LibraryCard[] = [
         bgColor: "#EDE9FE",
         tags: ["신비로운", "탐험", "발견"],
         imagePath: "/images/cards/event-mystery.webp",
+        learningContent: {
+            korean: "비밀",
+            english: "Mystery",
+        }
     },
     {
         id: "event-help",
@@ -273,17 +421,25 @@ export const eventCards: LibraryCard[] = [
         bgColor: "#FEE2E2",
         tags: ["따뜻한", "배려", "친절"],
         imagePath: "/images/cards/event-help.webp",
+        learningContent: {
+            korean: "도움",
+            english: "Help",
+        }
     },
     {
-        id: "event-dream",
+        id: "event-magic",
         category: "event",
-        name: "꿈 이루기",
-        description: "원하는 꿈을 이뤄가요",
-        icon: "Star",
-        color: "#EAB308",
-        bgColor: "#FEF9C3",
-        tags: ["희망", "노력", "성취"],
-        imagePath: "/images/cards/event-dream.webp",
+        name: "마법 배우기",
+        description: "신비한 마법을 배워요",
+        icon: "Wand2",
+        color: "#A855F7",
+        bgColor: "#F3E8FF",
+        tags: ["마법", "신비로운", "배움"],
+        imagePath: "/images/cards/event-magic.webp",
+        learningContent: {
+            korean: "마법",
+            english: "Magic",
+        }
     },
     {
         id: "event-treasure",
@@ -295,6 +451,40 @@ export const eventCards: LibraryCard[] = [
         bgColor: "#CCFBF1",
         tags: ["모험", "탐험", "발견"],
         imagePath: "/images/cards/event-treasure.webp",
+        learningContent: {
+            korean: "보물",
+            english: "Treasure",
+        }
+    },
+    {
+        id: "event-party",
+        category: "event",
+        name: "파티 열기",
+        description: "신나는 파티를 열어요",
+        icon: "PartyPopper",
+        color: "#F472B6",
+        bgColor: "#FDF2F8",
+        tags: ["즐거운", "축하", "함께"],
+        imagePath: "/images/cards/event-party.webp",
+        learningContent: {
+            korean: "파티",
+            english: "Party",
+        }
+    },
+    {
+        id: "event-growth",
+        category: "event",
+        name: "성장하기",
+        description: "어려움을 이겨내고 성장해요",
+        icon: "TrendingUp",
+        color: "#10B981",
+        bgColor: "#D1FAE5",
+        tags: ["성장", "극복", "용기"],
+        imagePath: "/images/cards/event-growth.webp",
+        learningContent: {
+            korean: "성장",
+            english: "Growth",
+        }
     },
 ];
 
@@ -311,6 +501,10 @@ export const moodCards: LibraryCard[] = [
         color: "#F59E0B",
         bgColor: "#FEF3C7",
         imagePath: "/images/cards/mood-warm.webp",
+        learningContent: {
+            korean: "따뜻한",
+            english: "Warm",
+        }
     },
     {
         id: "mood-exciting",
@@ -321,6 +515,10 @@ export const moodCards: LibraryCard[] = [
         color: "#EC4899",
         bgColor: "#FCE7F3",
         imagePath: "/images/cards/mood-exciting.webp",
+        learningContent: {
+            korean: "신나는",
+            english: "Exciting",
+        }
     },
     {
         id: "mood-calm",
@@ -331,6 +529,10 @@ export const moodCards: LibraryCard[] = [
         color: "#6366F1",
         bgColor: "#E0E7FF",
         imagePath: "/images/cards/mood-calm.webp",
+        learningContent: {
+            korean: "잔잔한",
+            english: "Calm",
+        }
     },
     {
         id: "mood-magical",
@@ -341,6 +543,10 @@ export const moodCards: LibraryCard[] = [
         color: "#A855F7",
         bgColor: "#F3E8FF",
         imagePath: "/images/cards/mood-magical.webp",
+        learningContent: {
+            korean: "마법 같은",
+            english: "Magical",
+        }
     },
     {
         id: "mood-funny",
@@ -351,6 +557,52 @@ export const moodCards: LibraryCard[] = [
         color: "#22C55E",
         bgColor: "#DCFCE7",
         imagePath: "/images/cards/mood-funny.webp",
+        learningContent: {
+            korean: "재미있는",
+            english: "Funny",
+        }
+    },
+    {
+        id: "mood-scary",
+        category: "mood",
+        name: "으스스한",
+        description: "살짝 무섭고 긴장되는",
+        icon: "Ghost",
+        color: "#374151",
+        bgColor: "#F3F4F6",
+        imagePath: "/images/cards/mood-scary.webp",
+        learningContent: {
+            korean: "으스스한",
+            english: "Scary",
+        }
+    },
+    {
+        id: "mood-mysterious",
+        category: "mood",
+        name: "신비로운",
+        description: "알 수 없는 비밀이 가득한",
+        icon: "Sparkles",
+        color: "#6366F1",
+        bgColor: "#EDE9FE",
+        imagePath: "/images/cards/mood-mysterious.webp",
+        learningContent: {
+            korean: "신비로운",
+            english: "Mysterious",
+        }
+    },
+    {
+        id: "mood-flutter",
+        category: "mood",
+        name: "설레는",
+        description: "두근두근 기대되는",
+        icon: "Heart",
+        color: "#F472B6",
+        bgColor: "#FDF2F8",
+        imagePath: "/images/cards/mood-flutter.webp",
+        learningContent: {
+            korean: "설레는",
+            english: "Flutter",
+        }
     },
 ];
 
@@ -369,6 +621,10 @@ export const learningTopicCards: LibraryCard[] = [
         tags: ["표정", "감정", "공감"],
         relatedItems: ["heart", "star", "sparkle"],
         imagePath: "/images/cards/topic-emotion.webp",
+        learningContent: {
+            korean: "감정",
+            english: "Emotion",
+        }
     },
     {
         id: "topic-expression",
@@ -381,6 +637,10 @@ export const learningTopicCards: LibraryCard[] = [
         tags: ["인사", "감사", "사과"],
         relatedItems: ["crown", "flower", "bird"],
         imagePath: "/images/cards/topic-expression.webp",
+        learningContent: {
+            korean: "표현",
+            english: "Expression",
+        }
     },
     {
         id: "topic-culture",
@@ -393,6 +653,10 @@ export const learningTopicCards: LibraryCard[] = [
         tags: ["전통", "명절", "한국"],
         relatedItems: ["hanbok", "club", "lantern"],
         imagePath: "/images/cards/topic-culture.webp",
+        learningContent: {
+            korean: "문화",
+            english: "Culture",
+        }
     },
     {
         id: "topic-science",
@@ -405,6 +669,10 @@ export const learningTopicCards: LibraryCard[] = [
         tags: ["우주", "로봇", "발명"],
         relatedItems: ["spaceship", "robot", "star"],
         imagePath: "/images/cards/topic-science.webp",
+        learningContent: {
+            korean: "과학",
+            english: "Science",
+        }
     },
     {
         id: "topic-nature",
@@ -417,6 +685,10 @@ export const learningTopicCards: LibraryCard[] = [
         tags: ["자연", "동물", "환경"],
         relatedItems: ["flower", "tree", "bird", "fish", "cloud"],
         imagePath: "/images/cards/topic-nature.webp",
+        learningContent: {
+            korean: "자연",
+            english: "Nature",
+        }
     },
 ];
 
@@ -436,6 +708,7 @@ export const learningCards: LibraryCard[] = [
         bgColor: "#FEF9C3",
         learningContent: {
             korean: "기쁘다, 행복하다",
+            english: "Happy",
             example: "선물을 받아서 정말 기뻐요!",
         },
         imagePath: "/images/cards/learn-happy.webp",
@@ -451,8 +724,10 @@ export const learningCards: LibraryCard[] = [
         bgColor: "#DBEAFE",
         learningContent: {
             korean: "슬프다, 서럽다",
+            english: "Sad",
             example: "친구가 떠나서 슬펐어요.",
         },
+        imagePath: "/images/cards/topic-emotion.webp",
     },
     {
         id: "learn-angry",
@@ -465,8 +740,10 @@ export const learningCards: LibraryCard[] = [
         bgColor: "#FEE2E2",
         learningContent: {
             korean: "화나다, 짜증나다",
+            english: "Angry",
             example: "약속을 어겨서 화가 났어요.",
         },
+        imagePath: "/images/cards/topic-emotion.webp",
     },
     {
         id: "learn-surprised",
@@ -479,8 +756,10 @@ export const learningCards: LibraryCard[] = [
         bgColor: "#F3E8FF",
         learningContent: {
             korean: "놀라다, 깜짝이야",
+            english: "Surprised",
             example: "깜짝 파티에 정말 놀랐어요!",
         },
+        imagePath: "/images/cards/topic-emotion.webp",
     },
 
     // 표현 (Phrase)
@@ -495,8 +774,10 @@ export const learningCards: LibraryCard[] = [
         bgColor: "#D1FAE5",
         learningContent: {
             korean: "안녕하세요",
+            english: "Hello",
             example: "선생님, 안녕하세요!",
         },
+        imagePath: "/images/cards/topic-expression.webp",
     },
     {
         id: "learn-thanks",
@@ -509,8 +790,10 @@ export const learningCards: LibraryCard[] = [
         bgColor: "#FCE7F3",
         learningContent: {
             korean: "고마워요, 감사합니다",
+            english: "Thank you",
             example: "도와줘서 정말 고마워요!",
         },
+        imagePath: "/images/cards/topic-expression.webp",
     },
     {
         id: "learn-sorry",
@@ -523,8 +806,10 @@ export const learningCards: LibraryCard[] = [
         bgColor: "#FFEDD5",
         learningContent: {
             korean: "미안해요, 죄송합니다",
+            english: "Sorry",
             example: "늦어서 정말 미안해요.",
         },
+        imagePath: "/images/cards/topic-expression.webp",
     },
 
     // 전통 (Tradition)
@@ -539,8 +824,10 @@ export const learningCards: LibraryCard[] = [
         bgColor: "#FFE4E6",
         learningContent: {
             korean: "한복",
+            english: "Hanbok",
             example: "설날에 예쁜 한복을 입어요.",
         },
+        imagePath: "/images/cards/topic-culture.webp",
     },
     {
         id: "learn-seollal",
@@ -553,8 +840,10 @@ export const learningCards: LibraryCard[] = [
         bgColor: "#FEE2E2",
         learningContent: {
             korean: "설날, 새해",
+            english: "Lunar New Year",
             example: "설날에 세배를 드려요.",
         },
+        imagePath: "/images/cards/topic-culture.webp",
     },
 
     // 교훈 (Moral)
@@ -568,7 +857,8 @@ export const learningCards: LibraryCard[] = [
         color: "#2563EB",
         bgColor: "#DBEAFE",
         learningContent: {
-            korean: "용기, 용감하다",
+            korean: "용기",
+            english: "Courage",
             example: "용기를 내서 친구를 도왔어요.",
         },
         imagePath: "/images/cards/learn-courage.webp",
@@ -583,7 +873,8 @@ export const learningCards: LibraryCard[] = [
         color: "#EC4899",
         bgColor: "#FCE7F3",
         learningContent: {
-            korean: "나누다, 함께하다",
+            korean: "나눔",
+            english: "Sharing",
             example: "친구와 간식을 나눠 먹었어요.",
         },
         imagePath: "/images/cards/learn-sharing.webp",
@@ -598,7 +889,8 @@ export const learningCards: LibraryCard[] = [
         color: "#16A34A",
         bgColor: "#DCFCE7",
         learningContent: {
-            korean: "정직하다, 솔직하다",
+            korean: "정직",
+            english: "Honesty",
             example: "정직하게 말하니 마음이 편했어요.",
         },
         imagePath: "/images/cards/learn-honesty.webp",

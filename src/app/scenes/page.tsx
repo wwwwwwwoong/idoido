@@ -19,7 +19,6 @@ export default async function ScenesPage() {
         where: { userId },
         orderBy: { createdAt: "desc" },
         include: {
-            cards: { orderBy: { order: "asc" } },
             character: { select: { id: true, name: true } },
         },
         take: 50,
@@ -117,31 +116,6 @@ export default async function ScenesPage() {
                                                 day: "numeric",
                                             })}
                                         </div>
-                                    </div>
-
-                                    {/* 언어카드 미리보기 */}
-                                    <div
-                                        style={{
-                                            marginTop: "var(--space-3)",
-                                            display: "flex",
-                                            gap: "var(--space-2)",
-                                            flexWrap: "wrap",
-                                        }}
-                                    >
-                                        {s.cards.map((c) => (
-                                            <span
-                                                key={c.id}
-                                                style={{
-                                                    padding: "4px 8px",
-                                                    fontSize: "var(--text-xs)",
-                                                    backgroundColor: "var(--color-cream-dark)",
-                                                    borderRadius: "var(--radius-sm)",
-                                                    color: "var(--color-text-secondary)",
-                                                }}
-                                            >
-                                                {c.ko}
-                                            </span>
-                                        ))}
                                     </div>
                                 </Card>
                             </Link>

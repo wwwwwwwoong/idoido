@@ -106,11 +106,17 @@ export default async function MyPage() {
                         else if (b.coverPath.startsWith("http") || b.coverPath.startsWith("/")) {
                             coverUrl = b.coverPath;
                         } else {
-                            // Supabase Storage 경로인 경우 signed URL 생성
-                            const { data: signedData } = await supabase.storage
+                            // Supabase Storage 경로인 경우 signed URL 생성 (경로 정제 포함)
+                            const cleanPath = b.coverPath.replace(/^\/+/, "");
+                            const { data: signedData, error } = await supabase.storage
                                 .from("doodles")
-                                .createSignedUrl(b.coverPath, 3600);
-                            coverUrl = signedData?.signedUrl || null;
+                                .createSignedUrl(cleanPath, 3600);
+
+                            if (error) {
+                                console.error(`Failed to sign cover url for book ${b.id}:`, error);
+                            } else {
+                                coverUrl = signedData?.signedUrl || null;
+                            }
                         }
                     }
                     return {

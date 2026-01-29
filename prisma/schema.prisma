@@ -135,7 +135,7 @@ model Scene {
 
   user      Profile     @relation(fields: [userId], references: [id], onDelete: Cascade)
   character Character?  @relation(fields: [characterId], references: [id], onDelete: SetNull)
-  book      Book?       @relation(fields: [bookId], references: [id], onDelete: SetNull)
+  book      Book?       @relation(fields: [bookId], references: [id], onDelete: Cascade)
 
 
   @@index([userId, createdAt])

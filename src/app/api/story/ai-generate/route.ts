@@ -1,4 +1,4 @@
-import { getGeminiModel } from "@/lib/gemini";
+import { generateStoryText, AI_PROVIDER } from "@/lib/ai/unified-client";
 import { requireUserId } from "@/lib/auth";
 import { successResponse, handleApiError, validationErrorResponse } from "@/lib/apiResponse";
 import { z } from "zod";
@@ -17,9 +17,23 @@ const AIGenerateSchema = z.object({
     characterName: z.string(),
 });
 
+// AI 응답 검증 스키마
+const AIStoryResponseSchema = z.object({
+    title: z.string(),
+    summary: z.string().optional(),
+    coverImagePrompt: z.string().optional(),
+    pages: z.array(z.object({
+        pageNumber: z.number().optional(),
+        content: z.string(),
+        imagePrompt: z.string().optional(),
+        learningHighlight: z.string().optional(),
+    })),
+    learningWords: z.array(z.string()).optional(),
+});
+
 /**
  * POST /api/story/ai-generate
- * Gemini AI를 사용해서 전체 동화 스토리 생성
+ * AI를 사용해서 전체 동화 스토리 생성 (OpenAI 또는 Gemini)
  */
 export async function POST(req: Request) {
     try {
@@ -34,11 +48,10 @@ export async function POST(req: Request) {
 
         const { prompt, recipe, characterName } = parseResult.data;
 
-        // Gemini 모델 호출
-        const model = getGeminiModel();
+        console.log(`Generating story via ${AI_PROVIDER}...`);
 
-        const result = await model.generateContent(prompt);
-        const text = result.response.text();
+        // 통합 클라이언트로 텍스트 생성
+        const text = await generateStoryText(prompt, { jsonMode: AI_PROVIDER === "openai" });
 
         // JSON 파싱 시도
         try {
@@ -57,19 +70,31 @@ export async function POST(req: Request) {
 
             const parsed = JSON.parse(jsonText);
 
+            // Zod로 AI 응답 검증
+            const validationResult = AIStoryResponseSchema.safeParse(parsed);
+
+            if (!validationResult.success) {
+                console.warn("AI response validation failed:", validationResult.error.issues);
+                // 검증 실패해도 기본값으로 진행
+            }
+
+            const validatedData = validationResult.success ? validationResult.data : parsed;
+
             // 페이지 형식 정리
-            const pages = (parsed.pages || []).map((page: any, index: number) => ({
+            const pages = (validatedData.pages || []).map((page: any, index: number) => ({
                 pageNumber: page.pageNumber || index + 1,
                 content: page.content || "",
                 learningHighlight: page.learningHighlight,
                 suggestedBackground: getBackgroundFromPlace(recipe.place, index),
+                imagePrompt: page.imagePrompt,
             }));
 
             const story = {
-                title: parsed.title || `${characterName}의 ${recipe.place} 모험`,
-                summary: parsed.summary || `${recipe.place}에서 ${recipe.event}을 하는 이야기`,
+                title: validatedData.title || `${characterName}의 ${recipe.place} 모험`,
+                summary: validatedData.summary || `${recipe.place}에서 ${recipe.event}을 하는 이야기`,
+                coverImagePrompt: validatedData.coverImagePrompt, // 추가됨
                 pages,
-                learningWords: parsed.learningWords || [],
+                learningWords: validatedData.learningWords || [],
                 coverColor: getMoodColor(recipe.mood),
                 coverStyle: "gradient" as const,
             };

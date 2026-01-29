@@ -65,20 +65,14 @@ export async function POST(req: Request) {
             );
         }
 
-        // OpenAI API 키 체크
-        if (!process.env.OPENAI_API_KEY) {
-            console.log("OPENAI_API_KEY not set, using mock data");
-            return NextResponse.json({ outlines: mockOutlines });
-        }
-
-        // API 키 있으면 실제 생성 시도
+        // Gemini API 호출
         try {
-            const { generateStoryOutlines } = await import("@/lib/openai");
+            const { generateStoryOutlines } = await import("@/lib/ai/text-client");
             const { mixer, seedType, ageRange, pageLength } = parsed.data;
             const outlines = await generateStoryOutlines(mixer, seedType, ageRange, pageLength);
             return NextResponse.json({ outlines });
         } catch (apiError) {
-            console.warn("OpenAI API failed, falling back to mock:", apiError);
+            console.warn("AI API failed, falling back to mock:", apiError);
             return NextResponse.json({ outlines: mockOutlines });
         }
     } catch (error) {

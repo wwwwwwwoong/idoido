@@ -43,42 +43,13 @@ export async function POST(request: NextRequest) {
             });
         }
 
-        // 성공 시 Supabase에 업로드
-        const supabase = await createClient();
-        const fileName = `transformed_${Date.now()}_${Math.random().toString(36).substring(7)}.png`;
-
-        // Base64를 Blob으로 변환
-        const imageBuffer = Buffer.from(result.imageBase64, "base64");
-
-        const { data: uploadData, error: uploadError } = await supabase.storage
-            .from("doodles")
-            .upload(fileName, imageBuffer, {
-                contentType: "image/png",
-                upsert: false,
-            });
-
-        if (uploadError) {
-            console.error("Upload error:", uploadError);
-            // 업로드 실패해도 base64 이미지는 반환
-            return successResponse({
-                transformed: true,
-                imageBase64: result.imageBase64,
-                imageUrl: null,
-                styleId,
-            });
-        }
-
-        // Public URL 생성
-        const { data: urlData } = supabase.storage
-            .from("doodles")
-            .getPublicUrl(uploadData.path);
-
+        // 성공 시 Base64만 반환 (클라이언트에서 배경 제거 후 업로드함)
+        // 이렇게 하면 삭제 시 orphan 파일이 생기지 않음
         return successResponse({
             transformed: true,
-            imageUrl: urlData?.publicUrl || null,
             imageBase64: result.imageBase64,
-            imagePath: uploadData.path,
             styleId,
+            imagePrompt: result.imagePrompt,
         });
     } catch (error) {
         console.error("Transform API error:", error);

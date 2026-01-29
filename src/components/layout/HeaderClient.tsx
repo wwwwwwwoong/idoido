@@ -6,12 +6,14 @@ import { User } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 import { useState, useEffect } from "react";
-import { Sprout, PenLine, FolderOpen, Menu, X, LogOut } from "lucide-react";
+import { Sprout, PenLine, FolderOpen, Menu, X, LogOut, Zap, Store } from "lucide-react";
 
-// 네비게이션 (만들기 + 마이페이지)
+// 네비게이션 (만들기 + 마이페이지 + 충전소)
 const navLinks = [
     { href: "/create/draw", label: "만들기", Icon: PenLine },
     { href: "/my", label: "마이페이지", Icon: FolderOpen },
+    { href: "/payment", label: "씨앗 충전소", Icon: Zap },
+    { href: "/shop", label: "마법의 상점", Icon: Store },
 ];
 
 function WalletDisplayCompact() {

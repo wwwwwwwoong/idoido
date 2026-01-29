@@ -7,7 +7,8 @@ export type CardCategory =
     | "event"       // 사건/소재
     | "mood"        // 분위기
     | "learning"    // 학습 카드
-    | "learningTopic"; // 학습 주제
+    | "learningTopic" // 학습 주제
+    | "object";     // 꾸미기 아이템
 
 export type LearningType =
     | "expression"  // 표정
@@ -27,6 +28,7 @@ export interface LibraryCard {
     learningType?: LearningType;  // 학습카드인 경우
     learningContent?: {
         korean: string;     // 한글 표현
+        english?: string;   // 영어 표현
         example?: string;   // 예문
         audio?: string;     // 오디오 파일 경로
     };

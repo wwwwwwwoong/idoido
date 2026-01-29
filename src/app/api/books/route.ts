@@ -63,17 +63,62 @@ export async function GET() {
             },
         });
 
-        return successResponse({
-            books: books.map((b) => ({
+        // Supabase signed URLs 생성
+        const { createClient } = await import("@/lib/supabase/server");
+        const supabase = await createClient();
+
+        const booksWithUrls = await Promise.all(books.map(async (b) => {
+            let coverUrl = b.coverPath;
+
+            // 이미지 경로 처리 (URL이 아니거나, Supabase Public URL인 경우 서명 시도)
+            const isSupabasePublicUrl = b.coverPath?.includes("/storage/v1/object/public/doodles/");
+            const isRelativePath = b.coverPath && !b.coverPath.startsWith("http") && !b.coverPath.startsWith("data:");
+
+            if (isRelativePath || isSupabasePublicUrl) {
+                try {
+                    // 상대 경로 추출 (이미 상대 경로면 그대로, URL이면 doodles/ 이후 추출)
+                    let storagePath = b.coverPath;
+                    if (isSupabasePublicUrl && b.coverPath) {
+                        const match = b.coverPath.match(/\/doodles\/(.+)$/);
+                        if (match && match[1]) {
+                            storagePath = match[1];
+                        }
+                    }
+
+                    if (storagePath) {
+                        const { data, error } = await supabase.storage
+                            .from("doodles")
+                            .createSignedUrl(storagePath, 3600);
+
+                        if (error) {
+                            console.error("Signed URL error:", error);
+                            coverUrl = null; // Fallback
+                        } else if (data?.signedUrl) {
+                            coverUrl = data.signedUrl;
+                        } else {
+                            coverUrl = null;
+                        }
+                    }
+                } catch (e) {
+                    console.error("Signed URL error:", e);
+                    coverUrl = null;
+                }
+            }
+
+            return {
                 id: b.id,
                 title: b.title,
-                coverPath: b.coverPath,
+                coverPath: coverUrl, // 서명된 URL로 교체
                 status: b.status,
                 sceneCount: b._count.scenes,
                 targetSceneCount: b.targetSceneCount,
                 createdAt: b.createdAt,
                 completedAt: b.completedAt,
-            })),
+            };
+        }));
+
+        return successResponse({
+            books: booksWithUrls,
         });
     } catch (error) {
         return handleApiError(error);
@@ -113,6 +158,7 @@ export async function POST(req: Request) {
                 objects: scene.objects || null,
                 learningTags: scene.learningTags || null, // 학습 태그 저장
                 characterId: scene.characterId || null, // 캐릭터 연결
+                sceneImagePath: scene.sceneImagePath || null, // 이미지 경로 저장
             }))
         } : undefined;
 
@@ -138,17 +184,31 @@ export async function POST(req: Request) {
 
         // Cards 저장
         if (input.cards && input.cards.length > 0) {
-            await prisma.card.createMany({
-                data: input.cards.map((card: any) => ({
-                    userId,
-                    bookId: book.id,
-                    type: card.type,
-                    name: card.name,
-                    desc: card.desc,
-                    color: card.color,
-                    imagePath: card.imagePath,
-                })),
-            });
+            // 중복 방지를 위해 하나씩 처리
+            for (const card of input.cards) {
+                // 이미 해당 유저가 가진 같은 이름의 카드가 있는지 확인
+                const existing = await prisma.card.findFirst({
+                    where: {
+                        userId,
+                        name: card.name,
+                    }
+                });
+
+                // 없을 경우에만 저장
+                if (!existing) {
+                    await prisma.card.create({
+                        data: {
+                            userId,
+                            bookId: book.id,
+                            type: card.type,
+                            name: card.name,
+                            desc: card.desc,
+                            color: card.color,
+                            imagePath: card.imagePath,
+                        }
+                    });
+                }
+            }
         }
 
         // 💧 물방울 보상: 동화책 시작

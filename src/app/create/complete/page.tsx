@@ -10,16 +10,16 @@ import Helper from "@/components/create/Helper";
 import BookViewer from "@/components/story/BookViewer";
 import { ArrowRight, RefreshCw, Wand2, ChevronLeft } from "lucide-react";
 import { GeneratedStory } from "@/lib/storyGenerator";
-
-// ... (lines 9-160 unchanged)
-
-
+import { createClient } from "@/lib/supabase/client";
+import ReadAloudButton from "@/components/story/ReadAloudButton";
 
 export default function CreateCompletePage() {
     const router = useRouter();
     const [story, setStory] = useState<GeneratedStory | null>(null);
     const [character, setCharacter] = useState<any>(null); // Load character data
     const [isLoading, setIsLoading] = useState(true);
+    const [signedUrls, setSignedUrls] = useState<Record<string, string>>({});
+    const supabase = createClient();
 
     useEffect(() => {
         // Load data from storage
@@ -37,9 +37,68 @@ export default function CreateCompletePage() {
         if (savedCharacter) setCharacter(JSON.parse(savedCharacter));
     }, [router]);
 
+    // 2. Signed URL 생성 (이미지 로딩 권한 문제 해결)
+    useEffect(() => {
+        if (!story) return;
+
+        const loadSignedUrls = async () => {
+            const urls: Record<string, string> = {};
+            const pathsToSign: string[] = [];
+
+            // 수집: 표지, 페이지 이미지, 캐릭터 이미지
+            if (story.coverImageUrl && !story.coverImageUrl.startsWith("http") && !story.coverImageUrl.startsWith("data:")) {
+                pathsToSign.push(story.coverImageUrl);
+            }
+            story.pages.forEach(p => {
+                if (p.imageUrl && !p.imageUrl.startsWith("http") && !p.imageUrl.startsWith("data:")) {
+                    pathsToSign.push(p.imageUrl);
+                }
+            });
+            if (character?.transformedImageUrl && !character.transformedImageUrl.startsWith("http") && !character.transformedImageUrl.startsWith("data:")) {
+                pathsToSign.push(character.transformedImageUrl);
+            } else if (character?.imageUrl && !character.imageUrl.startsWith("http") && !character.imageUrl.startsWith("data:")) {
+                pathsToSign.push(character.imageUrl);
+            }
+
+            // 병렬 변환 (Proxy API 사용)
+            await Promise.all(pathsToSign.map(async (path) => {
+                try {
+                    // Use server-side signing via API to bypass RLS issues
+                    const res = await fetch("/api/storage/sign", {
+                        method: "POST",
+                        body: JSON.stringify({ path }),
+                        headers: { "Content-Type": "application/json" }
+                    });
+
+                    if (res.ok) {
+                        const data = await res.json();
+                        if (data.signedUrl) {
+                            urls[path] = data.signedUrl;
+                        }
+                    } else {
+                        console.warn("Failed to sign url via API", path);
+                    }
+                } catch (e) {
+                    console.error("Failed to sign url for", path, e);
+                }
+            }));
+
+            setSignedUrls(urls);
+        };
+
+        loadSignedUrls();
+    }, [story, character]); // supabase는 외부 변수이므로 의존성 제외 가능
+
     const handleNext = () => {
         // Navigate to Learning/Reward Page
         router.push("/create/learning");
+    };
+
+    // Helper: Signed URL이 있으면 쓰고, 없으면 Public URL 시도
+    const getImageUrl = (path: string | undefined) => {
+        if (!path) return "";
+        if (path.startsWith("http") || path.startsWith("data:")) return path;
+        return signedUrls[path] || supabase.storage.from("doodles").getPublicUrl(path).data.publicUrl;
     };
 
     if (isLoading || !story) {
@@ -68,23 +127,21 @@ export default function CreateCompletePage() {
     const bookData = {
         id: "preview-book",
         title: story.title,
-        coverPath: story.coverStyle === "gradient" ? undefined : story.coverColor, // Use color as path if pattern/solid logic requires
-        // For MVP, we pass generated pages. 
-        // Note: BookViewer expects 'scenes', but GeneratedStory has 'pages'. 
-        // We need to map them.
+        coverPath: getImageUrl(story.coverImageUrl) || story.coverColor, // 표지 이미지 적용
+        coverColor: story.coverColor,
         scenes: story.pages.map((page, index) => ({
             id: `page-${index}`,
             order: index,
             storyText: page.content,
-            sceneImagePath: page.imageUrl || "/images/placeholder_story.png", // Fallback
-            backgroundId: page.suggestedBackground || "forest", // Fallback
+            sceneImagePath: getImageUrl(page.imageUrl),
+            backgroundId: page.suggestedBackground || "forest",
             resultChoice: "SUCCESS",
             itemId: "none",
             verbId: "none"
         })),
         character: character ? {
             ...character,
-            renderPath: character.transformedImageUrl || character.imageUrl
+            renderPath: getImageUrl(character.transformedImageUrl || character.imageUrl)
         } : undefined
     };
 
@@ -95,19 +152,27 @@ export default function CreateCompletePage() {
             subtitle="세상에 하나뿐인 나만의 동화책이 완성되었어요."
             backHref="/create/story" // 스토리 미리보기로 돌아가기
             helper={
-                <Helper
-                    character="whirlwind"
-                    message="우와! 정말 멋진 동화책이야! 친구들에게 자랑해볼까?"
-                    position="right"
-                    style={{ marginBottom: 0 }}
-                />
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%" }}>
+                    <div style={{ marginTop: "40px" }}>
+                        <ReadAloudButton
+                            text={story?.pages?.map((p: any) => p.content).filter(Boolean).join(". ") || ""}
+                            label="🔊 동화책 전체 듣기"
+                        />
+                    </div>
+                    <Helper
+                        character="whirlwind"
+                        message="우와! 정말 멋진 동화책이야! 친구들에게 자랑해볼까?"
+                        position="right"
+                        style={{ marginBottom: 0 }}
+                    />
+                </div>
             }
             contentMaxWidth="1200px"
         >
             <div className="w-full flex flex-col items-center gap-8 py-4">
 
-                {/* Book Viewer Container */}
-                <div className="relative w-full aspect-[16/9] shadow-2xl rounded-2xl overflow-hidden border-4 border-white bg-white/50 backdrop-blur-sm">
+                {/* Book Viewer Container - 1536x1024 (3:2) Aspect Ratio */}
+                <div className="relative w-full aspect-[3/2] shadow-2xl rounded-2xl overflow-hidden border-4 border-white bg-white/50 backdrop-blur-sm">
                     <BookViewer
                         book={bookData as any}
                         characterImageUrl={character?.transformedImageUrl || character?.imageUrl}

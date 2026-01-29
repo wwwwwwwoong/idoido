@@ -1,10 +1,25 @@
-// OpenAI Client for Story Generation
-import OpenAI from "openai";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 
-const openai = new OpenAI({
-    apiKey: process.env.OPENAI_API_KEY,
-});
+const apiKey = process.env.GOOGLE_AI_API_KEY || "";
 
+if (!apiKey) {
+    console.warn("⚠️ GOOGLE_AI_API_KEY is not set. Story features will not work.");
+}
+
+const genAI = new GoogleGenerativeAI(apiKey);
+
+// Models
+const FAST_MODEL = "gemini-2.5-flash-lite"; // Ultra-fast model for outlines
+const PRO_MODEL = "gemini-2.5-flash";   // Balanced high-performance model for manuscripts
+
+export const getTextModel = (modelName: string = FAST_MODEL) => {
+    if (!apiKey) {
+        throw new Error("GOOGLE_AI_API_KEY is not configured");
+    }
+    return genAI.getGenerativeModel({ model: modelName });
+};
+
+// Interfaces
 export interface StoryOutline {
     id: number;
     title: string;
@@ -37,7 +52,7 @@ export interface GeneratedStory {
     pages: PageData[];
 }
 
-// 스토리 초안 3개 생성
+// 1. 스토리 초안 생성
 export async function generateStoryOutlines(
     mixer: {
         tale: string;
@@ -51,6 +66,8 @@ export async function generateStoryOutlines(
     ageRange: string,
     pageLength: number
 ): Promise<StoryOutline[]> {
+    const model = getTextModel(FAST_MODEL);
+
     const prompt = `당신은 어린이 동화책 작가입니다. 다음 조건으로 동화 초안 3개를 만들어주세요.
 
 조건:
@@ -75,17 +92,13 @@ JSON 형식으로 응답해주세요:
 ]`;
 
     try {
-        const response = await openai.chat.completions.create({
-            model: "gpt-4o-mini",
-            messages: [{ role: "user", content: prompt }],
-            response_format: { type: "json_object" },
-            temperature: 0.9,
+        const result = await model.generateContent({
+            contents: [{ role: "user", parts: [{ text: prompt }] }],
+            generationConfig: { responseMimeType: "application/json" }
         });
 
-        const content = response.choices[0].message.content;
-        if (!content) throw new Error("No response from OpenAI");
-
-        const parsed = JSON.parse(content);
+        const responseText = result.response.text();
+        const parsed = JSON.parse(responseText);
         return Array.isArray(parsed) ? parsed : parsed.outlines || [];
     } catch (error) {
         console.error("Story outline generation failed:", error);
@@ -93,7 +106,7 @@ JSON 형식으로 응답해주세요:
     }
 }
 
-// 전체 페이지 원고 생성
+// 2. 전체 원고 생성
 export async function generateManuscript(
     outline: StoryOutline,
     mixer: {
@@ -108,6 +121,8 @@ export async function generateManuscript(
     pageLength: number,
     language: string
 ): Promise<GeneratedStory> {
+    const model = getTextModel(PRO_MODEL); // Use Pro for better storytelling
+
     const beatTypes = {
         8: ["SETUP", "SETUP", "INCITING", "TRY_FAIL", "TURN", "CLIMAX", "RESOLUTION", "RESOLUTION"],
         12: ["SETUP", "SETUP", "SETUP", "INCITING", "TRY_FAIL", "TRY_FAIL", "TURN", "TURN", "CLIMAX", "RESOLUTION", "RESOLUTION", "RESOLUTION"],
@@ -156,21 +171,33 @@ JSON 형식으로 응답:
 - sceneHint는 그림 생성용 간단한 장면 설명`;
 
     try {
-        const response = await openai.chat.completions.create({
-            model: "gpt-4o",
-            messages: [{ role: "user", content: prompt }],
-            response_format: { type: "json_object" },
-            temperature: 0.7,
+        const result = await model.generateContent({
+            contents: [{ role: "user", parts: [{ text: prompt }] }],
+            generationConfig: { responseMimeType: "application/json" }
         });
 
-        const content = response.choices[0].message.content;
-        if (!content) throw new Error("No response from OpenAI");
-
-        return JSON.parse(content);
+        const responseText = result.response.text();
+        return JSON.parse(responseText);
     } catch (error) {
         console.error("Manuscript generation failed:", error);
         throw error;
     }
 }
 
-export default openai;
+// Helper: Translate
+export async function translateToEnglish(koreanWord: string): Promise<string> {
+    const model = getTextModel(FAST_MODEL);
+
+    const prompt = `다음 한국어 단어의 영어 번역을 알려줘. 단어만 응답해줘.
+
+한국어: ${koreanWord}
+영어:`;
+
+    try {
+        const result = await model.generateContent(prompt);
+        return result.response.text().trim();
+    } catch (error) {
+        console.error("Translation error:", error);
+        return "";
+    }
+}

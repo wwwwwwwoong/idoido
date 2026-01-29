@@ -96,3 +96,44 @@ export async function removeBackgroundFromImage(base64: string, tolerance: numbe
         img.src = base64.startsWith("data:") ? base64 : `data:image/png;base64,${base64}`;
     });
 }
+
+/**
+ * 이미지 압축 유틸리티
+ * Base64 이미지를 지정된 포맷과 품질로 압축하여 Blob으로 반환합니다.
+ * 기본값: WebP, 품질 0.8 (투명도 지원 및 고압축)
+ */
+export async function compressImage(
+    base64: string,
+    quality: number = 0.8,
+    format: "image/webp" | "image/jpeg" | "image/png" = "image/webp"
+): Promise<Blob> {
+    return new Promise((resolve, reject) => {
+        const img = new Image();
+        img.onload = () => {
+            const canvas = document.createElement("canvas");
+            canvas.width = img.width;
+            canvas.height = img.height;
+            const ctx = canvas.getContext("2d");
+            if (!ctx) {
+                reject(new Error("Failed to get canvas context"));
+                return;
+            }
+
+            ctx.drawImage(img, 0, 0);
+
+            canvas.toBlob(
+                (blob) => {
+                    if (blob) {
+                        resolve(blob);
+                    } else {
+                        reject(new Error("Canvas to Blob failed"));
+                    }
+                },
+                format,
+                quality
+            );
+        };
+        img.onerror = (e) => reject(e);
+        img.src = base64.startsWith("data:") ? base64 : `data:image/png;base64,${base64}`;
+    });
+}

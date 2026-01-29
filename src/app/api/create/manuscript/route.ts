@@ -2,7 +2,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireUserId } from "@/lib/auth";
-import { generateManuscript } from "@/lib/openai";
+import { generateManuscript } from "@/lib/ai/text-client";
 
 const ManuscriptRequestSchema = z.object({
     outline: z.object({

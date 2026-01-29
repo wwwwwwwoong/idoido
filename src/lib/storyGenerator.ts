@@ -10,26 +10,31 @@ interface StoryGenerationRequest {
     characterName: string;
     placedItems?: string[];     // 배치된 아이템 이름들
     learningTopic?: LibraryCard; // 학습 주제
+    visualDescription?: string; // 캐릭터 외형 묘사 (일관성 위해 필수)
 }
 
 export interface GeneratedStory {
     title: string;
     summary: string;
+    coverImagePrompt?: string;
+    coverImageUrl?: string;
     pages: {
         pageNumber: number;
         content: string;
         learningHighlight?: string;
-        suggestedBackground?: string; // AI가 추천하는 배경 ID
-        imageUrl?: string; // AI가 생성한 삽화 URL
+        suggestedBackground?: string;
+        imageUrl?: string;
+        imagePrompt?: string;
     }[];
     learningWords: string[];
     coverColor: string;
     coverStyle: "pattern" | "gradient" | "solid";
+    isMockup?: boolean; // API 실패로 목업 사용 시 true
 }
 
 // 스토리 생성 프롬프트 구성
 function buildPrompt(request: StoryGenerationRequest): string {
-    const { personality, role, place, event, mood, learningCards = [], characterName, placedItems = [], learningTopic } = request;
+    const { personality, role, place, event, mood, learningCards = [], characterName, placedItems = [], learningTopic, visualDescription } = request;
 
     const learningContent = learningCards.length > 0
         ? `학습 요소: ${learningCards.map(c => `${c.name}(${c.learningContent?.korean || c.description})`).join(", ")}`
@@ -45,6 +50,19 @@ ${placedItems.map(item => `- ${item}`).join("\n")}
     const topicContent = learningTopic
         ? `학습 주제: ${learningTopic.name} - ${learningTopic.description}`
         : "";
+
+    // 시각적 묘사가 있으면 강제 주입
+    const characterVisualInstruction = visualDescription
+        ? `
+**CHARACTER VISUAL DESCRIPTION (MUST USE EXACTLY)**:
+"${visualDescription}"
+For every "imagePrompt", you MUST use the description above. Do not invent new features.
+`
+        : `
+**Character Appearance**:
+- Create a consistent look for ${characterName}.
+- Describe specific features (color, clothes, type) and reuse them in every prompt.
+`;
 
     return `
 당신은 한국 아이들을 위한 동화 작가입니다. 다음 재료로 6페이지 분량의 동화를 만들어주세요.
@@ -70,16 +88,37 @@ ${itemsContent}
 6. 한글로 작성
 7. 기승전결 구조로 작성 (기-승-전-결)
 
+## 이미지 프롬프트 작성 규칙 (매우 중요 - CONSISTENCY)
+"imagePrompt" 필드는 AI 이미지 생성기를 위한 *영문 프롬프트*입니다.
+
+**일관성 규칙 (CRITICAL)**:
+- 모든 페이지에서 **똑같은 캐릭터**가 나와야 합니다
+- 캐릭터의 **색상, 옷, 특징**을 매 페이지마다 동일하게 반복 묘사하세요
+- 첫 페이지에서 정의한 캐릭터 외형을 나머지 페이지에서도 **정확히 복사**하세요
+${characterVisualInstruction}
+
+다음 내용을 모든 imagePrompt에 반드시 포함하세요:
+1. **캐릭터 외형**: (위에서 제공된 상세 묘사 사용)
+2. **배경**: ${place.name} setting
+3. **아이템**: ${placedItems.length > 0 ? placedItems.join(", ") : "없음"}
+4. **행동**: 해당 페이지의 줄거리에 맞는 행동
+5. **스타일**: children's book illustration, ${mood.name} atmosphere
+
 ## 출력 형식 (JSON)
 {
     "title": "동화 제목",
     "summary": "한 줄 요약",
+    "coverImagePrompt": "Close-up of the main character, [CHARACTER DESCRIPTION], looking directly at camera and waving hand, happy expression, standing in front of ${place.name} ${placedItems.length > 0 ? `with ${placedItems.join(", ")} visible around` : ""}, detailed master piece, best quality, children's book cover art, magical atmosphere",
     "pages": [
-        {"pageNumber": 1, "content": "첫 페이지 내용 (기)"},
-        {"pageNumber": 2, "content": "두 번째 페이지 (기)"},
-        {"pageNumber": 3, "content": "세 번째 페이지 (승)"},
-        {"pageNumber": 4, "content": "네 번째 페이지 (전)"},
-        {"pageNumber": 5, "content": "다섯 번째 페이지 (결)"}
+        {
+            "pageNumber": 1, 
+            "content": "첫 페이지 내용 (기)",
+            "imagePrompt": "Wide view of ${place.name}, the character [action], [CHARACTER DESCRIPTION], clean illustration, no text"
+        },
+        {"pageNumber": 2, "content": "...", "imagePrompt": "Side view, the character [action], [CHARACTER DESCRIPTION], clean illustration, no text"},
+        {"pageNumber": 3, "content": "...", "imagePrompt": "Dynamic angle, the character [action], clean illustration, no text"},
+        {"pageNumber": 4, "content": "...", "imagePrompt": "Bird's eye view, the character [action], [CHARACTER DESCRIPTION], clean illustration, no text"},
+        {"pageNumber": 5, "content": "...", "imagePrompt": "Cinematic wide shot, the character [action], clean illustration, no text"}
     ],
     "learningWords": ["배운 단어1", "배운 단어2"]
 }
@@ -109,7 +148,9 @@ export async function generateStory(request: StoryGenerationRequest): Promise<Ge
         });
 
         if (!response.ok) {
-            console.error("API error, falling back to mock stories");
+            const errorText = await response.text();
+            console.error(`API error: ${response.status} ${response.statusText}`, errorText);
+            console.error("Falling back to mock stories due to API error");
             return [getMockStories(request)[0]]; // 첫 번째 목업만 반환
         }
 
@@ -125,6 +166,7 @@ export async function generateStory(request: StoryGenerationRequest): Promise<Ge
                 learningWords: data.story.learningWords || [],
                 coverColor: data.story.coverColor || "#F472B6",
                 coverStyle: "gradient",
+                coverImagePrompt: data.story.coverImagePrompt,
             };
             return [aiStory];
         } else if (data.stories && Array.isArray(data.stories) && data.stories.length > 0) {
@@ -132,12 +174,16 @@ export async function generateStory(request: StoryGenerationRequest): Promise<Ge
             return [data.stories[0]];
         }
 
-        // 파싱 실패 시 목업
-        return [getMockStories(request)[0]];
+        // 파싱 실패 시 목업 (콘솔에 경고)
+        console.warn("Story parsing failed, using mockup story");
+        const mockStory = getMockStories(request)[0];
+        return [{ ...mockStory, isMockup: true } as GeneratedStory];
     } catch (error) {
         console.error("Story generation error:", error);
-        // 에러 시 목업 스토리 반환
-        return [getMockStories(request)[0]];
+        // 에러 시 목업 스토리 반환 (콘솔에 경고)
+        console.warn("Story generation failed, using mockup story");
+        const mockStory = getMockStories(request)[0];
+        return [{ ...mockStory, isMockup: true } as GeneratedStory];
     }
 }
 
@@ -165,45 +211,35 @@ function getMockStories(request: StoryGenerationRequest & { characterName: strin
                 {
                     pageNumber: 1,
                     content: `어느 화창한 아침이었어요.\n${role.name} ${characterName}(이)는 기지개를 켜며 일어났답니다.\n"오늘은 정말 멋진 일이 일어날 것 같아!"\n${personality.name} 성격의 ${characterName}는 설레는 마음으로 집을 나섰어요.`,
-                    suggestedBackground: startBg
+                    suggestedBackground: startBg,
+                    imagePrompt: `A cute illustration of ${characterName}, morning sunlight, ${startBg} background`
                 },
                 {
                     pageNumber: 2,
-                    content: `발길이 닿은 곳은 신비로운 ${place.name}이었어요.\n그곳에는 처음 보는 신기한 식물들이 가득했죠.\n"우와, 여기 정말 멋지다! 저기엔 뭐가 있을까?"\n호기심 가득한 ${characterName}는 씩씩하게 걸음을 옮겼어요.`,
-                    suggestedBackground: startBg
+                    content: `발길이 닿은 곳은 신비로운 ${place.name}이었어요.\n그곳에는 처음 보는 신기한 것들이 가득했죠.\n"우와, 여기 정말 멋지다! 저기엔 뭐가 있을까?"\n호기심 가득한 ${characterName}는 씩씩하게 걸음을 옮겼어요.`,
+                    suggestedBackground: mainBg,
+                    imagePrompt: `A cute illustration of ${characterName}, exploring ${place.name}, curious expression`
                 },
                 {
                     pageNumber: 3,
                     content: `그런데 갑자기 ${event.name}을(를) 해야 하는 일이 생겼어요!\n모두가 당황했지만, ${characterName}는 침착했어요.\n"내가 한번 해볼게!"\n작은 두 주먹을 불끈 쥐고 용기를 냈답니다.`,
-                    suggestedBackground: mainBg
+                    suggestedBackground: mainBg,
+                    imagePrompt: `A cute illustration of ${characterName}, facing a challenge related to ${event.name}, brave expression`
                 },
                 {
                     pageNumber: 4,
                     content: `일은 생각보다 쉽지 않았어요. 땀이 뻘뻘 났지요.\n하지만 포기하지 않았어요.\n'나는 할 수 있어!' 속으로 세 번 외쳤답니다.\n그러자 마법처럼 힘이 솟아오르는 것 같았어요.`,
-                    suggestedBackground: "night"
+                    suggestedBackground: "night",
+                    imagePrompt: `A cute illustration of ${characterName}, working hard, magical energy, glowing lights`
                 },
                 {
                     pageNumber: 5,
-                    content: `와! 드디어 해냈어요!\n${characterName}의 ${personality.name} 마음 덕분에 문제가 해결되었답니다.\n주변 친구들이 모두 박수를 쳐주었어요.\n"최고야, ${characterName}! 정말 대단해!"`,
-                    suggestedBackground: mainBg
-                },
-                {
-                    pageNumber: 6,
-                    content: `어느새 해가 뉘엿뉘엿 지고 있었어요.\n"오늘 모험은 정말 잊지 못할 거야."\n${characterName}는 뿌듯한 마음을 안고 집으로 돌아왔답니다.\n꿈속에서도 신나는 모험을 계속했겠죠?`,
-                    suggestedBackground: endBg
+                    content: `와! 드디어 해냈어요!\n${characterName}의 ${personality.name} 마음 덕분에 문제가 해결되었답니다.\n주변 친구들이 모두 박수를 쳐주었어요.\n"최고야, ${characterName}! 정말 대단해!"\n${characterName}는 뿌듯한 마음을 안고 집으로 돌아왔답니다.`,
+                    suggestedBackground: endBg,
+                    imagePrompt: `A cute illustration of ${characterName}, celebrating success, happy friends, sunset, peaceful atmosphere`
                 },
             ],
             learningWords: ["용기", "모험", "성취감"],
-        },
-        // 다른 목업들은 이제 사용되지 않으므로 생략해도 되지만 
-        // 혹시 몰라 하나 더 유지
-        {
-            title: `${place.name}의 숨겨진 보물`,
-            summary: `호기심 많은 ${characterName}의 신기한 발견`,
-            coverColor: "#A78BFA", // Purple
-            coverStyle: "gradient",
-            pages: [],
-            learningWords: ["지혜", "욕심", "행복"],
         }
     ];
 }

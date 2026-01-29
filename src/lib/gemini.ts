@@ -1,21 +1,8 @@
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import { getTextModel } from "@/lib/ai/text-client";
+import { getImageAnalysisModel } from "@/lib/ai/image-client";
 
-// API 키 확인
-const apiKey = process.env.GOOGLE_AI_API_KEY || "";
-if (!apiKey) {
-    console.warn("⚠️ GOOGLE_AI_API_KEY is not set. AI features will not work.");
-}
-
-// Gemini 클라이언트 생성
-const genAI = new GoogleGenerativeAI(apiKey);
-
-// 텍스트 생성 모델 (gemini-flash-latest 사용 - 무료 티어 최적화)
-export const getGeminiModel = (modelName: string = "gemini-flash-latest") => {
-    if (!apiKey) {
-        throw new Error("GOOGLE_AI_API_KEY is not configured");
-    }
-    return genAI.getGenerativeModel({ model: modelName });
-};
+// Re-export for backward compatibility if needed, though mostly direct usage is preferred.
+export const getGeminiModel = getTextModel;
 
 // 동화 스토리 생성
 export async function generateFairyTale({
@@ -78,7 +65,7 @@ JSON 형식으로 응답해줘:
 
 // 이미지 분석 (캐릭터 그림에서 특징 추출)
 export async function analyzeDrawing(imageBase64: string) {
-    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+    const model = getImageAnalysisModel();
 
     const prompt = `이 어린이 그림을 분석해서 캐릭터의 특징을 설명해줘.
 

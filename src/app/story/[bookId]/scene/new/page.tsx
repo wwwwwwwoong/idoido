@@ -64,9 +64,9 @@ function generateCards(bg: string, item: string, action: string) {
     const actionKo: Record<string, string> = { run: "달리다", eat: "먹다", play: "놀다", sleep: "자다" };
     const actionEn: Record<string, string> = { run: "run", eat: "eat", play: "play", sleep: "sleep" };
     return [
-        { ko: bgKo[bg] || bg, en: bgEn[bg] || bg, order: 0 },
-        { ko: itemKo[item] || item, en: itemEn[item] || item, order: 1 },
-        { ko: actionKo[action] || action, en: actionEn[action] || action, order: 2 },
+        { type: "장소", ko: bgKo[bg] || bg, en: bgEn[bg] || bg, order: 0 },
+        { type: "사물", ko: itemKo[item] || item, en: itemEn[item] || item, order: 1 },
+        { type: "행동", ko: actionKo[action] || action, en: actionEn[action] || action, order: 2 },
     ];
 }
 
@@ -418,8 +418,6 @@ export default function NewScenePage() {
             title={getStepTitle()}
             subtitle={getStepSubtitle()}
             backHref={`/story/${bookId}`}
-            bookTitle={bookTitle}
-            sceneInfo={sceneCount > 0 ? { current: sceneCount, total: targetSceneCount } : undefined}
         >
             {/* 교훈 표시 */}
             {bookLesson && innerStep === "role" && (

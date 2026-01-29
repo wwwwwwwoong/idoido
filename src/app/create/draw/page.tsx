@@ -8,7 +8,7 @@ import { ChevronRight, ChevronLeft, Eraser, RotateCcw, Pencil, Sparkles, Wand2, 
 import { Button, Input } from "@/components";
 import StoryFlowLayout from "@/components/layout/StoryFlowLayout";
 import Helper from "@/components/create/Helper";
-import { ART_STYLES, type ArtStyleId } from "@/lib/characterTransform";
+import { ART_STYLES, type ArtStyleId } from "@/lib/characterStyles";
 import { removeBackgroundFromImage } from "@/lib/imageUtils";
 
 interface Character {
@@ -50,6 +50,7 @@ export default function CreateDrawPage() {
     const [savedCanvasBlob, setSavedCanvasBlob] = useState<Blob | null>(null);
     const [selectedStyle, setSelectedStyle] = useState<ArtStyleId>("storybook");
     const [transformError, setTransformError] = useState<string | null>(null);
+    const [characterPrompt, setCharacterPrompt] = useState<string | null>(null);
 
     useEffect(() => {
         const recipeData = localStorage.getItem("create_recipe");
@@ -239,8 +240,10 @@ export default function CreateDrawPage() {
                     console.error("Background removal failed:", bgError);
                     setTransformedImageUrl(`data:image/png;base64,${data.imageBase64}`);
                 }
+                if (data.imagePrompt) setCharacterPrompt(data.imagePrompt);
             } else if (data.transformed && data.imageUrl) {
                 setTransformedImageUrl(data.imageUrl);
+                if (data.imagePrompt) setCharacterPrompt(data.imagePrompt);
             } else {
                 // 변환 실패 시 placeholder 사용
                 console.warn("Transform failed, using placeholder");
@@ -316,6 +319,41 @@ export default function CreateDrawPage() {
                 console.log("No saved canvas blob found");
             }
 
+            // 변환된 AI 이미지도 Supabase에 업로드 (삭제 시 정상 처리를 위해)
+            let renderFilePath = "";
+            if (transformedImageUrl) {
+                try {
+                    const { createClient } = await import("@/lib/supabase/client");
+                    const supabase = createClient();
+                    const { compressImage } = await import("@/lib/imageUtils");
+
+                    // WebP로 압축 (품질 0.8)
+                    const blob = await compressImage(transformedImageUrl, 0.8, "image/webp");
+
+                    const renderFileName = `transformed_${Date.now()}_${Math.random().toString(36).substring(7)}.webp`;
+                    console.log("Uploading transformed image (compressed):", renderFileName, blob.size, "bytes");
+
+                    const { data: renderUploadData, error: renderUploadError } = await supabase.storage
+                        .from("doodles")
+                        .upload(renderFileName, blob, {
+                            contentType: "image/webp",
+                            upsert: false,
+                        });
+
+                    if (renderUploadError) {
+                        console.error("Render upload error:", renderUploadError);
+                    } else if (renderUploadData) {
+                        renderFilePath = renderUploadData.path;
+                        console.log("Saved render path:", renderFilePath);
+                    }
+                } catch (uploadErr) {
+                    console.error("Failed to upload transformed image:", uploadErr);
+                }
+            } else if (transformedImageUrl) {
+                // 이미 URL이면 경로 추출 시도 (기존 호환성)
+                renderFilePath = transformedImageUrl;
+            }
+
             const res = await fetch("/api/characters", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
@@ -323,7 +361,7 @@ export default function CreateDrawPage() {
                     name: characterName,
                     // DB에는 파일 경로만 저장 (빈 문자열이면 placeholder)
                     doodlePath: doodleFilePath || "https://placehold.co/400x400/png?text=Doodle",
-                    renderPath: transformedImageUrl,
+                    renderPath: renderFilePath || undefined,
                     role: "hero",
                     personality: "brave",
                 }),
@@ -338,9 +376,10 @@ export default function CreateDrawPage() {
             localStorage.setItem("create_character", JSON.stringify({
                 id: savedChar.id,
                 name: savedChar.name,
-                imageUrl: savedChar.renderPath,
+                imageUrl: transformedImageUrl, // 화면 표시용 (Base64 or URL)
                 doodleUrl: doodleDisplayUrl,
                 styleId: selectedStyle, // Save styleId for image generation
+                description: characterPrompt,
                 hasDrawing: true,
                 isNew: true,
             }));
@@ -398,7 +437,7 @@ export default function CreateDrawPage() {
                     >
                         <Helper
                             character="whirlwind"
-                            message={`${characterName || '친구'}를(를) 예쁘게 바꾸고 있어! 조금만 기다려~`}
+                            message={`${characterName || '친구'}을(를) 예쁘게 바꾸고 있어! 조금만 기다려~`}
                             position="right"
                             style={{ marginBottom: 0 }}
                         />
